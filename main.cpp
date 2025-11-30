@@ -1032,7 +1032,7 @@ static std::vector<char> readFile(const std::string& filename) {
         file.close();
         return buffer;
         }
-
+int readblend(const char* pathname);
 struct SnSwapChain
 {
     VkSwapchainKHR swapChain{NULL};     
@@ -1124,10 +1124,10 @@ struct SnSwapChain
 				vkDestroyBuffer(device,uniforms[i].buffer,nullptr);
 		}	
 	}
-	
 	void CreateDescriptors()
     {
-        uint32_t imageCount = capabilities.minImageCount + 1;
+        readblend("lab.blend");
+		uint32_t imageCount = capabilities.minImageCount + 1;
 		//Une liste de bindings pour le shader, un modele d'entrées
 		
 		VkDescriptorSetLayoutBinding setLayoutBindings{};

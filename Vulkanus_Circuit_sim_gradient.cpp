@@ -1,4 +1,5 @@
 //20 Mars 2023
+#include "math.h"
 
 float Matrice[] = {       0.001f,    -0.001f,        0.f,    0.f,   1.f,                       
                          -0.001f,     0.002f,    -0.001f,    0.f,   0.f,           
@@ -151,7 +152,7 @@ PdhCollectQueryData(m_hQuery);  */
     // gaussian elimination.  On entry, a[0..n-1][0..n-1] is the
     // matrix to be factored.  ipvt[] returns an integer vector of pivot
     // indices, used in the lu_solve() routine.
-boolean lu_factor(double *a, int n, int *ipvt) {
+bool lu_factor(double *a, int n, int *ipvt) {
 	int i,j,k;
 
 

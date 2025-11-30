@@ -89,9 +89,9 @@ struct OndeMsg
 class OndeCore
 {
 	MiniBase<OndeComponent> BaseComponent;
-
-	OndeMsg message[16];
 	unsigned long count_gfx;
+	//messages 
+	OndeMsg message[16];
 	unsigned long count_msg;
 	OndeComponent* first_gfx;
 public:
@@ -99,7 +99,7 @@ public:
 	void UnStoreGfx(OndeComponent* p);
 	OndeCore();
 	void PostMsg(int port, int msg, void* ptr);
-	bool GetMsg(unsigned long *pcount_msg, OndeMsg *pmessage);
+	bool GetMsg(unsigned long *pcount_msg, OndeMsg *pmessage); //while(GetMsg(mypos,&OndeMsg)){}
 	OndeComponent* List() { return first_gfx; }
 	static OndeCore& Instance();
 };
