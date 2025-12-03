@@ -12,8 +12,6 @@ void sn_Vulkandraw();
       
 #define DELAY_FAST 250000
 
-void Testconj();
-
 struct sn_Key
 {
 	bool pressed = false;
@@ -336,12 +334,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	}
 	return (DefWindowProc(hWnd, uMsg, wParam, lParam));												\
 }																			
-void test_lu();
+
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
-   
-	Testconj();
-	test_lu();
     WNDCLASSEX wndClass;
 
 	wndClass.cbSize = sizeof(WNDCLASSEX);
@@ -468,6 +463,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
 
+struct Vertex
+{
+	glm::vec3 position;
+	glm::vec3 normale;
+	glm::vec2 uv;
+};
+
 struct Camera
 {
 	glm::vec3 position = glm::vec3(0.0f);
@@ -512,13 +514,15 @@ struct Camera
 
 struct snVulkan
 {
+	VkPipeline Pipe;
 	VkDevice mdevice;
-	VkDevice& operator&(){return mdevice;};
+	operator VkDevice&(){return mdevice;};
+	operator VkPipeline&(){return Pipe;};
 }device_test;
 
-VkResult err;
-uint32_t graphicsFamily{0};
-uint32_t presentFamily{0};
+	VkResult err;
+	uint32_t graphicsFamily{0};
+	uint32_t presentFamily{0};
 	
     //VULKAN API
     VkInstance instance;
@@ -528,7 +532,6 @@ uint32_t presentFamily{0};
 
 	//GPU
     VkPhysicalDevice carte_graphique = VK_NULL_HANDLE;
-    VkPhysicalDeviceMemoryProperties RamProperties;  
     VkSurfaceCapabilitiesKHR capabilities;
     std::vector<VkSurfaceFormatKHR> formats;
     std::vector<VkPresentModeKHR> presentModes;
@@ -543,7 +546,7 @@ uint32_t presentFamily{0};
 	VkDescriptorPool descriptorPool;
 
 	void rebuild(bool);
-	void Buffers(uint32_t imageCount);
+	void Buffers(uint32_t swap_imageCount);
 	void DestroyBuffers();
 
 struct PipeModel{
@@ -680,21 +683,22 @@ struct PipeModel{
 			.pPushConstantRanges = 0
 		};
 
-        pipelineInfo.stageCount = 0;
-        pipelineInfo.pStages = 0;
-        pipelineInfo.pVertexInputState = &vertexInputInfo;
-        pipelineInfo.pInputAssemblyState = &inputAssembly;
-        pipelineInfo.pViewportState = &viewportState;
-        pipelineInfo.pRasterizationState = &rasterizer;
-        pipelineInfo.pMultisampleState = &multisampling;
-        pipelineInfo.pColorBlendState = &colorBlending;
-        pipelineInfo.pDynamicState = &dynamicState;
-        pipelineInfo.layout = 0;
-        pipelineInfo.renderPass = 0;
-        pipelineInfo.subpass = 0;
-        pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
-
+        pipelineInfo ={
+			.stageCount = 0,
+			.pStages = 0,
+			.pVertexInputState = &vertexInputInfo,
+			.pInputAssemblyState = &inputAssembly,
+			.pViewportState = &viewportState,
+			.pRasterizationState = &rasterizer,
+			.pMultisampleState = &multisampling,
+			.pColorBlendState = &colorBlending,
+			.pDynamicState = &dynamicState,
+			.layout = 0,
+			.renderPass = 0,
+			.subpass = 0,
+			.basePipelineHandle = VK_NULL_HANDLE
 		};
+	}
 	void PipeModel_Proceed(VkRenderPass rp)
 	{
 		for(volatile int i = 0; i < pipelineInfo.stageCount; i++)
@@ -724,8 +728,7 @@ struct PipeModel{
 
 		for(volatile int i = 0; i < pipelineInfo.stageCount; i++)
 		{
-			
-			vkDestroyShaderModule(device, ShaderStageInfo[i].module, nullptr);
+		vkDestroyShaderModule(device, ShaderStageInfo[i].module, nullptr);
 		}
 		
 		if(ShaderStageInfo)delete [] ShaderStageInfo;
@@ -848,7 +851,7 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
 				}
 			}
 	}
-
+	
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
     std::set<uint32_t> uniqueQueueFamilies = {graphicsFamily, presentFamily};
 
@@ -892,8 +895,10 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
         if(err != VK_SUCCESS){
             std::runtime_error("failed to create logical device!");
         }
-               
-        vkGetDeviceQueue(device, graphicsFamily, 0, &graphicsQueue);
+        
+		VkDebugUtilsMessengerCreateInfoEXT dbg_messenger_create_info;
+		
+		vkGetDeviceQueue(device, graphicsFamily, 0, &graphicsQueue);
         vkGetDeviceQueue(device, presentFamily, 0, &presentQueue);
         
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(carte_graphique, surface, &capabilities);
@@ -1032,33 +1037,167 @@ static std::vector<char> readFile(const std::string& filename) {
         file.close();
         return buffer;
         }
-int readblend(const char* pathname);
+
+void Read_Obj()
+{
+	std::vector<char> object = readFile("suzan.obj");
+	if(!object.size())return; //PAS DE fiCHIER
+	std::vector<char> line;
+	bool newline = true;
+	
+	std::vector<float> uvs;
+	std::vector<float> vertex;
+	std::vector<float> normales;
+	std::vector<std::vector<char>> faces;
+	
+	int uvs_vec_size = 0;
+	int vertex_vec_size = 0;
+	int normales_vec_size = 0;
+	int faces_vec_size = 0;
+	int vec_size = 0;
+	int uvs_size = 0;
+	int vertex_size = 0;
+	int normale_size = 0;
+
+	int j = 0; //index dans la ligne
+	std::vector<std::vector<char>> tokens;
+	std::vector<char> token;
+	for(volatile int i = 0;i < object.size();i++)//Jusqu'a la fin du fichier
+	{
+		if(object[i] != '\n'){
+		line.push_back(object[i]); //Pousse chaque caracteres de la ligne
+		//char* pligne = reinterpret_cast<char*>(line.data());
+		
+		if(line[j] != ' ')
+			{
+				token.push_back(line[j]);//Stocke chaque token
+				j++;
+				continue;
+			}
+		tokens.push_back(token);//Dans les tokens de la ligne
+		j++;
+		if(object[i] != '\n'){token.clear();
+							  continue;}//Encore un token
+		
+		}
+		//Fin de ligne
+		tokens.push_back(token);
+		token.clear();
+    	int store = -1;
+		vec_size = 0;
+		for(int k=0;k<tokens.size();k++)//Procede sur tous les tokens
+		{
+			if(k==0)//C'est le premier token c'est quoi?
+			{
+				store = -1;
+				if(tokens[k].size() == 1)
+				{
+					if(tokens[0][0]=='v'){store = 0;vertex_size++;} //vertex
+					if(tokens[0][0]=='f'){store = 3;} //face
+				}
+				if(tokens[k].size() == 2)
+				{
+					if(tokens[0][0]=='v' && tokens[0][1]=='n'){store = 1;normale_size++;} //normales
+					if(tokens[0][0]=='v' && tokens[0][1]=='t'){store = 2;uvs_size++;} //uvs
+				}
+			}
+			else //Pousse les suivants dans leur stockage respectif
+			{
+			vec_size++;
+			if(store == 0){vertex.push_back(std::atof(reinterpret_cast<char*>(tokens[k].data())));
+				if(vec_size > vertex_vec_size)vertex_vec_size=vec_size;}
+			if(store == 1){normales.push_back(std::atof(reinterpret_cast<char*>(tokens[k].data())));
+				if(vec_size > normales_vec_size)normales_vec_size=vec_size;}
+			if(store == 2){uvs.push_back(std::atof(reinterpret_cast<char*>(tokens[k].data())));
+				if(vec_size > uvs_vec_size)uvs_vec_size=vec_size;}
+			if(store == 3){
+				faces.push_back(tokens[k]);
+				if(vec_size > faces_vec_size)faces_vec_size=vec_size;}
+			}
+		}
+		if(store == 3)//Si c'est les indices de faces faut décoder
+		{
+			if(faces.size() == 4)std::cout << "QUAD";
+			if(faces.size() == 3)std::cout << "TRI" << std::endl;
+			std::vector<std::vector<char>> indices;
+			std::vector<int> indices_int;
+			for(int l=0;l<faces.size();l++)
+			{
+				std::vector<char> n;
+				for(int m=0;m<faces[l].size();m++)
+				{
+				char v=faces[l][m];
+				if(v == '/')
+					{
+						indices.push_back(n);
+						n.clear();
+						continue;
+					}
+				n.push_back(v);
+				}
+				indices.push_back(n);
+				for(int m=0;m<indices.size();m++)
+				{
+					indices_int.push_back(std::atoi(reinterpret_cast<char*>(indices[m].data())));
+					
+				}
+				for(int m=0;m<indices_int.size();m++)
+				{
+					std::cout << "/" << indices_int[m];
+				}
+				std::cout << ",";
+				indices_int.clear();
+				indices.clear();
+			}
+			faces.clear();
+		}
+		line.clear();
+		tokens.clear();
+		newline = true;
+		j = 0;
+		
+	}
+	if(vertex_size == vertex.size()/vertex_vec_size)
+		if(uvs_size == uvs.size()/uvs_vec_size)
+			if(normale_size == normales.size()/normales_vec_size)
+				return;
+	
+	newline = true;
+	//Tout a été lu
+
+}
+
+//is a [] BY FRAMES
+#define SNARRAY_BY_FRAME
 struct SnSwapChain
 {
-    VkSwapchainKHR swapChain{NULL};     
+    uint32_t swap_imageCount;
+	VkExtent2D window_size;
+	
+	VkSwapchainKHR swapChain{NULL};     
     
-	std::vector<VkImage> swapChainImages;
-    std::vector<VkImageView> swapChainImageViews;
-    std::vector<VkFramebuffer> swapChainFramebuffers;
+	std::vector<VkImage>		swapChainImages;
+    std::vector<VkImageView> 	swapChainImageViews;
+    std::vector<VkFramebuffer> 	swapChainFramebuffers;
     
 	VkSemaphore imageAvailableSemaphore;
     VkSemaphore renderFinishedSemaphore;
     VkFence inFlightFence;
 	
 	VkCommandPool commandPool;
-	VkCommandBuffer *commandBuffers = nullptr; 				//[] BY FRAMES
+	VkCommandBuffer SNARRAY_BY_FRAME 		*commandBuffers = nullptr; 				
 	
-	VkDescriptorSetLayout *setlayouts = nullptr; 			//[] BY FRAMES
-	VkDescriptorSet *descriptorsets = nullptr; 				//[] BY FRAMES
+	VkDescriptorSetLayout SNARRAY_BY_FRAME	*setlayouts = nullptr; 			
+	VkDescriptorSet SNARRAY_BY_FRAME 		*descriptorsets = nullptr; 			
 	
-	Uniform *uniforms = nullptr; 							//[] BY FRAMES
+	Uniform SNARRAY_BY_FRAME 				*uniforms = nullptr; 							//[] BY FRAMES
 
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
 
 	//Memory
 	
-	VkExtent2D window_size;
+	
 	bool pipe = true;
 	void CreatePipeline()
 	{
@@ -1088,7 +1227,7 @@ struct SnSwapChain
 		pm.bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 		pm.bindings[0].descriptorCount = 1;
 
-		pm.pipelineLayoutInfo.setLayoutCount = capabilities.minImageCount + 1; //un par frame
+		pm.pipelineLayoutInfo.setLayoutCount = swap_imageCount; //un par frame
 		pm.pipelineLayoutInfo.pSetLayouts = setlayouts; //<---- Ils servent ici un
 		
 		pm.PipeModel_Proceed(renderPass);
@@ -1101,14 +1240,12 @@ struct SnSwapChain
 		vkDestroyPipeline(device, graphicsPipeline, nullptr);
         vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
     }
-    
 	void CreateBuffers()
 	{
-		uint32_t imageCount = capabilities.minImageCount + 1;
 		if(!uniforms)
 		{
-			uniforms = new Uniform[imageCount];
-			for (size_t i = 0; i < imageCount; i++) 
+			uniforms = new Uniform[swap_imageCount];
+			for (size_t i = 0; i < swap_imageCount; i++) 
 			{
 				glm::mat4 matrice = glm::mat4(1.f);
 				uniforms[i].transfert = false;
@@ -1118,16 +1255,14 @@ struct SnSwapChain
 	}
 	void DestroyBuffers()
 	{
-		uint32_t imageCount = capabilities.minImageCount + 1;
-		for (size_t i = 0; i < imageCount; i++) 
+		for (size_t i = 0; i < swap_imageCount; i++) 
 		{
 				vkDestroyBuffer(device,uniforms[i].buffer,nullptr);
 		}	
 	}
 	void CreateDescriptors()
     {
-        readblend("lab.blend");
-		uint32_t imageCount = capabilities.minImageCount + 1;
+		Read_Obj();
 		//Une liste de bindings pour le shader, un modele d'entrées
 		
 		VkDescriptorSetLayoutBinding setLayoutBindings{};
@@ -1151,16 +1286,16 @@ struct SnSwapChain
 		err = vkCreateDescriptorSetLayout(device, &descriptorLayoutCI, nullptr, &descriptorSetLayout);
 		if( err!= VK_SUCCESS){throw std::runtime_error("failed to create descriptor set layout!");}
 		
-		descriptorsets = new VkDescriptorSet[imageCount];
+		descriptorsets = new VkDescriptorSet[swap_imageCount];
 		//Les sets de ce modéle un par frame
-		setlayouts = new VkDescriptorSetLayout[imageCount];
+		setlayouts = new VkDescriptorSetLayout[swap_imageCount];
 
-		for (size_t i = 0; i < imageCount; i++)setlayouts[i] = descriptorSetLayout;
+		for (size_t i = 0; i < swap_imageCount; i++)setlayouts[i] = descriptorSetLayout;
 		
 		VkDescriptorSetAllocateInfo allocateInfo{};
 		allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 		allocateInfo.descriptorPool = descriptorPool;
-		allocateInfo.descriptorSetCount = imageCount;
+		allocateInfo.descriptorSetCount = swap_imageCount;
 		allocateInfo.pSetLayouts = setlayouts;
 		
 		err = vkAllocateDescriptorSets(device, &allocateInfo, descriptorsets);
@@ -1168,10 +1303,10 @@ struct SnSwapChain
 		
 		vkDestroyDescriptorSetLayout(device,descriptorSetLayout,NULL);
 		
-		VkWriteDescriptorSet writeDescriptorSets[imageCount];
-		VkDescriptorBufferInfo Buffer_info_UBO[imageCount];
+		VkWriteDescriptorSet writeDescriptorSets[swap_imageCount];
+		VkDescriptorBufferInfo Buffer_info_UBO[swap_imageCount];
 
-		for (size_t i = 0; i < imageCount; i++) 
+		for (size_t i = 0; i < swap_imageCount; i++) 
 		{	
 			Buffer_info_UBO[i].buffer = uniforms[i].buffer;
 			Buffer_info_UBO[i].offset = 0;
@@ -1188,7 +1323,7 @@ struct SnSwapChain
 			
 		}
 
-		vkUpdateDescriptorSets(device, imageCount, writeDescriptorSets, 0, nullptr);
+		vkUpdateDescriptorSets(device, swap_imageCount, writeDescriptorSets, 0, nullptr);
 		
 		
     }
@@ -1196,7 +1331,7 @@ struct SnSwapChain
     {
         vkDeviceWaitIdle(device);
 		
-		for (size_t i = 0; i < capabilities.minImageCount + 1; i++) 
+		for (size_t i = 0; i < swap_imageCount; i++) 
 		{	
 			vkDestroyDescriptorSetLayout(device,setlayouts[i],NULL);
 		}
@@ -1215,20 +1350,13 @@ struct SnSwapChain
 					static_cast<uint32_t>(sn_interface.destHeight)
 				};
 
-		uint32_t imageCount = capabilities.minImageCount + 1;
-
 		
-
-
-		if (capabilities.maxImageCount > 0 && imageCount > capabilities.maxImageCount) {
-				imageCount = capabilities.maxImageCount;
-			}
 
 		VkSwapchainCreateInfoKHR createInfoSC{};
 
 			createInfoSC.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 			createInfoSC.surface = surface;
-			createInfoSC.minImageCount = imageCount;
+			createInfoSC.minImageCount = swap_imageCount;
 			createInfoSC.imageFormat = surfaceFormat.format;
 			createInfoSC.imageColorSpace = surfaceFormat.colorSpace;
 			createInfoSC.imageExtent = window_size;
@@ -1257,9 +1385,9 @@ struct SnSwapChain
 
 		// STEP 7 IMAGES VIEWS
 			
-			vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
-			swapChainImages.resize(imageCount);
-			vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImages.data());
+			vkGetSwapchainImagesKHR(device, swapChain, &swap_imageCount, nullptr);
+			swapChainImages.resize(swap_imageCount);
+			vkGetSwapchainImagesKHR(device, swapChain, &swap_imageCount, swapChainImages.data());
 			
 			VkFormat swapChainImageFormat = surfaceFormat.format;
 			
@@ -1385,9 +1513,9 @@ struct SnSwapChain
 			allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 			allocInfo.commandPool = commandPool;
 			allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-			allocInfo.commandBufferCount = imageCount;
+			allocInfo.commandBufferCount = swap_imageCount;
 
-			commandBuffers = new VkCommandBuffer[imageCount];
+			commandBuffers = new VkCommandBuffer[swap_imageCount];
 			
 			
 			if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers) != VK_SUCCESS) {
@@ -1412,7 +1540,7 @@ struct SnSwapChain
 	//-------------------------------------------------------------------------------------------------------------------------------		
 	//-------------------------------------------------------------------------------------------------------------------------------		
 		
-	for (size_t i = 0; i < imageCount; i++) 
+	for (size_t i = 0; i < swap_imageCount; i++) 
 	{	
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1428,7 +1556,7 @@ struct SnSwapChain
 		renderPassBeginInfo.renderArea.extent = window_size;
 
 		VkClearValue clearColor = {{0.3f, 0.3f, 0.3f, 1.0f}};
-		renderPassBeginInfo.clearValueCount = 1;
+		renderPassBeginInfo.clearValueCount = 0;
 		renderPassBeginInfo.pClearValues = &clearColor;
 
 		vkCmdBeginRenderPass(commandBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -1514,7 +1642,12 @@ void Destroy_SWAPCHAIN(){
     }
 	void LightUp()
 	{
-		uint32_t imageCount = capabilities.minImageCount + 1;
+		swap_imageCount = capabilities.minImageCount + 1;
+
+		if (capabilities.maxImageCount > 0 && swap_imageCount > capabilities.maxImageCount) {
+				swap_imageCount = capabilities.maxImageCount;
+			}
+
 		CreateBuffers();
 		CreateDescriptors();
 	}
@@ -1525,7 +1658,6 @@ void EcranOn()
 }
 void EcranOff()
 {
-	ECRAN.DestroyPipeline();
 	ECRAN.Destroy_SWAPCHAIN();
 	ECRAN.DestroyDescriptors();
 	ECRAN.DestroyBuffers();
@@ -1579,19 +1711,17 @@ void sn_Vulkandraw(){
 		//vkQueueSubmit
 		//vkQueuePresentKHR
 
+	VkSemaphore waitSemaphores[] = {ECRAN.imageAvailableSemaphore};
+	VkSemaphore signalSemaphores[] = {ECRAN.renderFinishedSemaphore};
+	VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+	
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-	VkSemaphore waitSemaphores[] = {ECRAN.imageAvailableSemaphore};
-	VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 	submitInfo.waitSemaphoreCount = 1;
 	submitInfo.pWaitSemaphores = waitSemaphores;
 	submitInfo.pWaitDstStageMask = waitStages;
-
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &ECRAN.commandBuffers[imageIndex];
-
-	VkSemaphore signalSemaphores[] = {ECRAN.renderFinishedSemaphore};
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = signalSemaphores;
 
