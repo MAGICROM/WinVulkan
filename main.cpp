@@ -1350,8 +1350,6 @@ struct SnSwapChain
 					static_cast<uint32_t>(sn_interface.destHeight)
 				};
 
-		
-
 		VkSwapchainCreateInfoKHR createInfoSC{};
 
 			createInfoSC.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -1423,12 +1421,16 @@ struct SnSwapChain
 			VkAttachmentDescription colorAttachment{};
 			colorAttachment.format = swapChainImageFormat;
 			colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-			colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD; //VK_ATTACHMENT_LOAD_OP_CLEAR;
 			colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 			colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 			colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-			colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			colorAttachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; //VK_IMAGE_LAYOUT_UNDEFINED;
 			colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+			//Mode clear activé
+			colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
 			VkAttachmentDescription depthAttachment{};
 			depthAttachment.format = findDepthFormat(carte_graphique);
@@ -1556,7 +1558,7 @@ struct SnSwapChain
 		renderPassBeginInfo.renderArea.extent = window_size;
 
 		VkClearValue clearColor = {{0.3f, 0.3f, 0.3f, 1.0f}};
-		renderPassBeginInfo.clearValueCount = 0;
+		renderPassBeginInfo.clearValueCount = 1;
 		renderPassBeginInfo.pClearValues = &clearColor;
 
 		vkCmdBeginRenderPass(commandBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -1669,6 +1671,7 @@ void rebuild(bool rebuild)
 		ECRAN.Create_SWAPCHAIN();
 	}
 	static float horloge = 0.0f;
+
 void Update_uniforms(uint32_t imageIndex){     
 
 		horloge += sn_interface.delta_time;// * glm::two_pi<float>();
@@ -1680,6 +1683,7 @@ void Update_uniforms(uint32_t imageIndex){
 		Model = trans * project * glm::rotate(glm::mat4(1.0f), horloge, glm::vec3(0, 0, 1.f));
 		memcpy(ECRAN.uniforms[imageIndex].mem_ptr,glm::value_ptr(Model),sizeof(glm::mat4));
 	}
+
 void sn_Vulkandraw(){        
 	
 	vkWaitForFences(device, 1, &ECRAN.inFlightFence, VK_TRUE, UINT64_MAX);
