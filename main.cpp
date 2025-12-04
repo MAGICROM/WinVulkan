@@ -6,6 +6,12 @@
 #include <iostream>
 #include <chrono>
 
+#define USE_IMGUI_PLEASE_IFYOUCAN
+#ifdef USE_IMGUI_PLEASE_IFYOUCAN
+#include "imgui.h"
+#include "imgui_impl_vulkan.h"
+#endif
+
 void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd);
 void sn_Vulkandestroy();
 void sn_Vulkandraw();
@@ -44,6 +50,9 @@ bool input_released(long time)
 #define MOUSE_INPUT(x, maskpressed, maskreleased) \
 if(raw->data.mouse.usButtonFlags & maskpressed)MouseBt[x].input_pressed(timestamp); \
 if(raw->data.mouse.usButtonFlags & maskreleased)MouseBt[x].input_released(timestamp); 	
+
+
+
 struct sn_Interface
 {	
 	bool _no_initialized = true; //For initialisation
@@ -148,7 +157,21 @@ long long Tick()
 
 	return Tick;
 	}
-void Mouse(RAWINPUT* raw, long timestamp)
+	bool Button_pressed(RAWINPUT* raw,int* pnum)
+	{
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_DOWN){*pnum=0;return true;}
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_UP){*pnum=0;return false;}
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_DOWN){*pnum=1;return true;}
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_UP){*pnum=1;return false;}
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_DOWN){*pnum=2;return true;}
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_UP){*pnum=2;return false;}
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_4_DOWN){*pnum=3;return true;}
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_4_UP){*pnum=3;return false;}
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_5_DOWN){*pnum=4;return true;}
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_5_UP){*pnum=4;return false;}
+		return false;
+	}
+	void Mouse(RAWINPUT* raw, long timestamp)
 	{
 		if(raw->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE)
 		{
@@ -174,7 +197,23 @@ void Mouse(RAWINPUT* raw, long timestamp)
 		MOUSE_INPUT(2, RI_MOUSE_MIDDLE_BUTTON_DOWN, RI_MOUSE_MIDDLE_BUTTON_UP)
 		MOUSE_INPUT(3, RI_MOUSE_BUTTON_4_DOWN, RI_MOUSE_BUTTON_4_UP)
 		MOUSE_INPUT(4, RI_MOUSE_BUTTON_5_DOWN, RI_MOUSE_BUTTON_5_UP)
-
+		
+		int button = -1;
+		if(Button_pressed(raw,&button))
+		{
+		ImGuiIO& io = ImGui::GetIO();
+		io.AddMouseButtonEvent(button,true);
+		}
+		else if(button != -1)
+		{
+		ImGuiIO& io = ImGui::GetIO();
+		io.AddMouseButtonEvent(button,false);
+		}
+		
+		
+		
+		
+		
 		if(raw->data.mouse.usButtonFlags & RI_MOUSE_WHEEL)
 		{
 			wheelDelta += (short)raw->data.mouse.usButtonData;
@@ -289,7 +328,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		sn_interface.wX = LOWORD(lParam) - (sn_interface.destWidth / 2);
 		sn_interface.wY = HIWORD(lParam) - (sn_interface.destHeight / 2);
 		sn_interface.Wmousemove();
- 
+		
+		ImGuiIO& io = ImGui::GetIO();
+		io.AddMousePosEvent((float)LOWORD(lParam), HIWORD(lParam));
+
 		std::cout << "Mouse :" 
 				<< sn_interface.base
 				<< " " 
@@ -506,6 +548,20 @@ struct Camera
 	}
 };
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define USE_IMGUI_PLEASE_IFYOUCAN
+#ifdef USE_IMGUI_PLEASE_IFYOUCAN
+#include "imgui.h"
+#include "imgui_impl_vulkan.h"
+#endif
+
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_win32.h>
 
@@ -520,6 +576,7 @@ struct snVulkan
 	operator VkPipeline&(){return Pipe;};
 }device_test;
 
+	uint32_t swap_imageCount;
 	VkResult err;
 	uint32_t graphicsFamily{0};
 	uint32_t presentFamily{0};
@@ -541,9 +598,16 @@ struct snVulkan
     VkQueue graphicsQueue;
     VkQueue presentQueue;
     VkRenderPass renderPass;
+	VkRenderPass renderPass_imgui;
 
 	//MEMORY
 	VkDescriptorPool descriptorPool;
+	#ifdef USE_IMGUI_PLEASE_IFYOUCAN
+	VkDescriptorPool imgui_pDescriptorPool;
+	VkCommandPool imgui_CommandPool;
+	VkCommandBuffer imgui_CommandBuffer;
+	#endif
+	
 
 	void rebuild(bool);
 	void Buffers(uint32_t swap_imageCount);
@@ -928,8 +992,135 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
 			descriptorPoolCI.pPoolSizes = &descriptorPoolSizes;
 	
 		err = vkCreateDescriptorPool(device, &descriptorPoolCI, nullptr, &descriptorPool);
+
+		#ifdef USE_IMGUI_PLEASE_IFYOUCAN
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO& io = ImGui::GetIO(); (void)io;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+        ImGui::StyleColorsDark();
+        //ImGui_ImplGlfw_InitForVulkan(window, true);
+
+        VkDescriptorPoolSize pool_sizes[] =
+        {
+            { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+            { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+            { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+        };
+            VkDescriptorPoolCreateInfo pool_info = {};
+       
+            pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+            pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+            pool_info.maxSets = 1000 * IM_ARRAYSIZE(pool_sizes);
+            pool_info.poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes);
+            pool_info.pPoolSizes = pool_sizes;
+            err = vkCreateDescriptorPool(device, &pool_info, NULL, &imgui_pDescriptorPool);
+		#endif
 		
+		swap_imageCount = capabilities.minImageCount + 1;
+
+		if (capabilities.maxImageCount > 0 && swap_imageCount > capabilities.maxImageCount) {
+				swap_imageCount = capabilities.maxImageCount;
+			}
+
 		EcranOn();
+
+		#ifdef USE_IMGUI_PLEASE_IFYOUCAN           
+            VkCommandPoolCreateInfo poolInfo{};
+			poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+			poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+			poolInfo.queueFamilyIndex = graphicsFamily;
+
+			if (vkCreateCommandPool(device, &poolInfo, nullptr, &imgui_CommandPool) != VK_SUCCESS) {
+				throw std::runtime_error("failed to create command pool!");
+			}
+			
+			VkCommandBufferAllocateInfo allocInfo{};
+			allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+			allocInfo.commandPool = imgui_CommandPool;
+			allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+			allocInfo.commandBufferCount = 1;
+
+			if (vkAllocateCommandBuffers(device, &allocInfo, &imgui_CommandBuffer) != VK_SUCCESS) {
+				throw std::runtime_error("failed to allocate command buffers!");
+			}
+			
+			VkAttachmentDescription Attachments{};
+			
+
+            Attachments.format = VK_FORMAT_B8G8R8A8_UNORM;
+            Attachments.samples = VK_SAMPLE_COUNT_1_BIT;
+            Attachments.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+            Attachments.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            Attachments.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            Attachments.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            Attachments.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            Attachments.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+			VkAttachmentReference color_Ref{};
+            color_Ref.attachment = 0;
+            color_Ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			
+			VkSubpassDescription subpass{};
+            subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+            subpass.colorAttachmentCount = 1;
+            subpass.pColorAttachments = &color_Ref;
+			
+			VkRenderPassCreateInfo renderPassInfo_imgui{};
+            renderPassInfo_imgui.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+            renderPassInfo_imgui.attachmentCount = 1;
+            renderPassInfo_imgui.pAttachments = &Attachments;
+            renderPassInfo_imgui.subpassCount = 1;
+            renderPassInfo_imgui.pSubpasses = &subpass;
+            renderPassInfo_imgui.dependencyCount = 0;
+
+            err = vkCreateRenderPass(device, &renderPassInfo_imgui, nullptr, &renderPass_imgui);
+            if( err!= VK_SUCCESS){
+                    throw std::runtime_error("failed to create render pass!!");
+                }
+				
+			ImGui_ImplVulkan_InitInfo dearimgui{};
+            dearimgui.Instance = instance;
+            dearimgui.Device = device;
+            dearimgui.PhysicalDevice = carte_graphique;  
+            dearimgui.ImageCount = swap_imageCount;
+            dearimgui.MinImageCount = capabilities.minImageCount;
+            dearimgui.Queue = graphicsQueue;
+            dearimgui.QueueFamily = 0;
+            dearimgui.DescriptorPool = imgui_pDescriptorPool;
+			dearimgui.PipelineInfoMain.RenderPass = renderPass_imgui;
+        
+        ImGui_ImplVulkan_Init(&dearimgui);
+        // Upload Fonts
+            {
+                // Use any command queue
+                
+  /*              VkCommandBuffer command_buffer = imgui_CommandBuffer;
+                err = vkResetCommandPool(device, imgui_CommandPool, 0);
+                VkCommandBufferBeginInfo begin_info = {};
+                begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+                begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+                err = vkBeginCommandBuffer(command_buffer, &begin_info);
+                ImGui_ImplVulkan_CreateFontsTexture(command_buffer);
+                VkSubmitInfo end_info = {};
+                end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+                end_info.commandBufferCount = 1;
+                end_info.pCommandBuffers = &command_buffer;
+                err = vkEndCommandBuffer(command_buffer);
+                err = vkQueueSubmit(graphicsQueue, 1, &end_info, VK_NULL_HANDLE);
+                err = vkDeviceWaitIdle(device);
+                ImGui_ImplVulkan_DestroyFontUploadObjects();*/
+			}
+		#endif
 		rebuild(false);
 }
 uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) 
@@ -998,6 +1189,17 @@ void CreateCopyBuffer(void *Src,uint32_t size){
 void sn_Vulkandestroy()
 {
 	vkDeviceWaitIdle(device);
+
+	#ifdef USE_IMGUI_PLEASE_IFYOUCAN           
+	   	ImGui_ImplVulkan_Shutdown();
+		vkFreeCommandBuffers(device,imgui_CommandPool,1,&imgui_CommandBuffer);
+		vkDestroyCommandPool(device, imgui_CommandPool, nullptr);
+		vkDestroyRenderPass(device, renderPass_imgui, nullptr);
+	#endif
+
+       
+
+	
 	EcranOff();
 	vkDestroyDescriptorPool(device,descriptorPool,NULL);  
 	vkDestroyDevice(device,NULL);
@@ -1168,10 +1370,9 @@ void Read_Obj()
 }
 
 //is a [] BY FRAMES
-#define SNARRAY_BY_FRAME
+#define SN_ARRAY_BY_FRAME
 struct SnSwapChain
 {
-    uint32_t swap_imageCount;
 	VkExtent2D window_size;
 	
 	VkSwapchainKHR swapChain{NULL};     
@@ -1185,15 +1386,17 @@ struct SnSwapChain
     VkFence inFlightFence;
 	
 	VkCommandPool commandPool;
-	VkCommandBuffer SNARRAY_BY_FRAME 		*commandBuffers = nullptr; 				
+	VkCommandBuffer SN_ARRAY_BY_FRAME 		*commandBuffers = nullptr; 				
 	
-	VkDescriptorSetLayout SNARRAY_BY_FRAME	*setlayouts = nullptr; 			
-	VkDescriptorSet SNARRAY_BY_FRAME 		*descriptorsets = nullptr; 			
+	VkDescriptorSetLayout SN_ARRAY_BY_FRAME	*setlayouts = nullptr; 			
+	VkDescriptorSet SN_ARRAY_BY_FRAME 		*descriptorsets = nullptr; 			
 	
-	Uniform SNARRAY_BY_FRAME 				*uniforms = nullptr; 							//[] BY FRAMES
+	Uniform SN_ARRAY_BY_FRAME 				*uniforms = nullptr; 							//[] BY FRAMES
 
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
+
+	
 
 	//Memory
 	
@@ -1530,6 +1733,7 @@ struct SnSwapChain
 	//-------------------------------------------------------------------------------------------------------------------------------		
 	//-------------------------------------------------------------------------------------------------------------------------------		
 	//-------------------------------------------------------------------------------------------------------------------------------		
+	
 	//-------------------------------------------------------------------------------------------------------------------------------		
 	//-------------------------------------------------------------------------------------------------------------------------------		
 	//------------------------------------------------------------------------------------------------------------------------------
@@ -1622,7 +1826,10 @@ struct SnSwapChain
 //-------------------------------------------------------------------------------------------------------------------------------		
 //-------------------------------------------------------------------------------------------------------------------------------	
 void Destroy_SWAPCHAIN(){
-        delete [] commandBuffers;
+		
+        
+		vkFreeCommandBuffers(device,commandPool,swap_imageCount,commandBuffers);
+		delete [] commandBuffers;
 		
 		vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
         vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
@@ -1644,12 +1851,6 @@ void Destroy_SWAPCHAIN(){
     }
 	void LightUp()
 	{
-		swap_imageCount = capabilities.minImageCount + 1;
-
-		if (capabilities.maxImageCount > 0 && swap_imageCount > capabilities.maxImageCount) {
-				swap_imageCount = capabilities.maxImageCount;
-			}
-
 		CreateBuffers();
 		CreateDescriptors();
 	}
@@ -1684,6 +1885,10 @@ void Update_uniforms(uint32_t imageIndex){
 		memcpy(ECRAN.uniforms[imageIndex].mem_ptr,glm::value_ptr(Model),sizeof(glm::mat4));
 	}
 
+bool show_demo_window = true;
+bool show_another_window = false;
+ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+	
 void sn_Vulkandraw(){        
 	
 	vkWaitForFences(device, 1, &ECRAN.inFlightFence, VK_TRUE, UINT64_MAX);
@@ -1715,6 +1920,90 @@ void sn_Vulkandraw(){
 		//vkQueueSubmit
 		//vkQueuePresentKHR
 
+		ImGuiIO& io = ImGui::GetIO();
+		
+
+    io.DisplaySize = ImVec2((float)sn_interface.destWidth, (float)sn_interface.destHeight);
+    io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
+	
+	io.DeltaTime = sn_interface.delta_time;
+	
+
+	// Start the Dear ImGui frame
+        ImGui_ImplVulkan_NewFrame();
+        ImGui::NewFrame();
+		
+        // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
+        if (show_demo_window)
+            ImGui::ShowDemoWindow(&show_demo_window);
+
+        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
+        {
+            static float f = 0.0f;
+            static int counter = 0;
+
+            ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
+
+            ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
+            ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
+            ImGui::Checkbox("Another Window", &show_another_window);
+
+            ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+            ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
+
+            if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
+                counter++;
+            ImGui::SameLine();
+            ImGui::Text("counter = %d", counter);
+
+            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+            ImGui::End();
+        }
+
+        // 3. Show another simple window.
+        if (show_another_window)
+        {
+            ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+            ImGui::Text("Hello from another window!");
+            if (ImGui::Button("Close Me"))
+                show_another_window = false;
+            ImGui::End();
+        }
+
+        // Rendering
+        ImGui::Render();
+        ImDrawData* draw_data = ImGui::GetDrawData();
+        const bool is_minimized = (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f);
+      
+     	err = vkResetCommandPool(device, imgui_CommandPool, 0);
+        VkCommandBufferBeginInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        err = vkBeginCommandBuffer(imgui_CommandBuffer, &info);
+      
+    	VkClearValue clear_color = {};
+
+        VkRenderPassBeginInfo RPinfo = {};
+        
+		RPinfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        RPinfo.renderPass = renderPass_imgui;
+        RPinfo.framebuffer = ECRAN.swapChainFramebuffers[imageIndex];
+        RPinfo.renderArea.extent.width = sn_interface.destWidth;
+        RPinfo.renderArea.extent.height = sn_interface.destHeight;
+        RPinfo.clearValueCount = 1;
+        RPinfo.pClearValues = &clear_color;
+        vkCmdBeginRenderPass(imgui_CommandBuffer, &RPinfo, VK_SUBPASS_CONTENTS_INLINE);
+    
+		// Record dear imgui primitives into command buffer
+		ImGui_ImplVulkan_RenderDrawData(draw_data, imgui_CommandBuffer);
+
+		// Submit command buffer
+		vkCmdEndRenderPass(imgui_CommandBuffer);
+		vkEndCommandBuffer(imgui_CommandBuffer);
+		
+	VkCommandBuffer cmdbfrs[2] = {ECRAN.commandBuffers[imageIndex],imgui_CommandBuffer};
+    
+
 	VkSemaphore waitSemaphores[] = {ECRAN.imageAvailableSemaphore};
 	VkSemaphore signalSemaphores[] = {ECRAN.renderFinishedSemaphore};
 	VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
@@ -1724,16 +2013,17 @@ void sn_Vulkandraw(){
 	submitInfo.waitSemaphoreCount = 1;
 	submitInfo.pWaitSemaphores = waitSemaphores;
 	submitInfo.pWaitDstStageMask = waitStages;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &ECRAN.commandBuffers[imageIndex];
+	submitInfo.commandBufferCount = 2;
+	submitInfo.pCommandBuffers = cmdbfrs;//&ECRAN.commandBuffers[imageIndex];
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = signalSemaphores;
 
 	Update_uniforms(imageIndex);
 
-	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, ECRAN.inFlightFence) != VK_SUCCESS) {
+	vkQueueSubmit(graphicsQueue, 1, &submitInfo, ECRAN.inFlightFence);
+/*	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, ECRAN.inFlightFence) != VK_SUCCESS) {
 		throw std::runtime_error("failed to submit draw command buffer!");
-	}
+	}*/
 
 	VkPresentInfoKHR presentInfo{};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
