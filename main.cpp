@@ -9,6 +9,8 @@
 #define USE_IMGUI_PLEASE_IFYOUCAN
 #ifdef USE_IMGUI_PLEASE_IFYOUCAN
 #include "imgui.h"
+#include "imgui_impl_win32.h"
+#define VK_USE_PLATFORM_WIN32_KHR
 #include "imgui_impl_vulkan.h"
 #endif
 
@@ -97,12 +99,19 @@ void Wmousemove(void)
 }
 void ChangeSize(unsigned short Width,unsigned short Height)
 {
-	resizing = true;
+	
 	destWidth = Width;
 	destHeight = Height;
 	aspectratio = (float)Height/(float)Width;
 	aspectH = base / destWidth; 		
 	aspectV = base / Height; 
+
+	#ifdef USE_IMGUI_PLEASE_IFYOUCAN
+	ImGuiIO& io = ImGui::GetIO();
+    io.DisplaySize = ImVec2((float)destWidth, (float)destHeight);
+    io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
+	#endif
+	resizing = false;
 }
 
 long long Tick()
@@ -140,7 +149,10 @@ long long Tick()
 	fps /= 128.0f;
 	delta_time = fps;
 	fps = 1.0f / delta_time; 
-
+#ifdef USE_IMGUI_PLEASE_IFYOUCAN
+	//ImGuiIO& io = ImGui::GetIO();
+	//io.DeltaTime = delta_time;
+#endif
 	if(MouseBt[0].pressed)MouseBt[0].duration = c_start - MouseBt[0].timestamp;
 	if(MouseBt[1].pressed)MouseBt[1].duration = c_start - MouseBt[1].timestamp;
 	if(MouseBt[2].pressed)MouseBt[2].duration = c_start - MouseBt[2].timestamp;
@@ -198,22 +210,20 @@ long long Tick()
 		MOUSE_INPUT(3, RI_MOUSE_BUTTON_4_DOWN, RI_MOUSE_BUTTON_4_UP)
 		MOUSE_INPUT(4, RI_MOUSE_BUTTON_5_DOWN, RI_MOUSE_BUTTON_5_UP)
 		
+		#ifdef USE_IMGUI_PLEASE_IFYOUCAN
 		int button = -1;
 		if(Button_pressed(raw,&button))
 		{
-		ImGuiIO& io = ImGui::GetIO();
-		io.AddMouseButtonEvent(button,true);
+		//ImGuiIO& io = ImGui::GetIO();
+		//io.AddMouseButtonEvent(button,true);
 		}
 		else if(button != -1)
 		{
-		ImGuiIO& io = ImGui::GetIO();
-		io.AddMouseButtonEvent(button,false);
+		//ImGuiIO& io = ImGui::GetIO();
+		//io.AddMouseButtonEvent(button,false);
 		}
-		
-		
-		
-		
-		
+		#endif
+
 		if(raw->data.mouse.usButtonFlags & RI_MOUSE_WHEEL)
 		{
 			wheelDelta += (short)raw->data.mouse.usButtonData;
@@ -233,9 +243,20 @@ bool Keyboard(RAWINPUT* raw, long timestamp)
 	}
 }sn_interface;
 
+#ifdef USE_IMGUI_PLEASE_IFYOUCAN
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);   
+#endif
+
+
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)						
 {																									\
-   	unsigned char key = (unsigned char)wParam;
+
+	#ifdef USE_IMGUI_PLEASE_IFYOUCAN
+	ImGui_ImplWin32_WndProcHandler(hWnd,uMsg,wParam,lParam);   
+	#endif
+
+	unsigned char key = (unsigned char)wParam;
 	
 	switch (uMsg)
 	{
@@ -329,10 +350,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		sn_interface.wY = HIWORD(lParam) - (sn_interface.destHeight / 2);
 		sn_interface.Wmousemove();
 		
+		#ifdef USE_IMGUI_PLEASE_IFYOUCAN
 		ImGuiIO& io = ImGui::GetIO();
 		io.AddMousePosEvent((float)LOWORD(lParam), HIWORD(lParam));
+		#endif
 
-		std::cout << "Mouse :" 
+		/*std::cout << "Mouse :" 
 				<< sn_interface.base
 				<< " " 
 				<< sn_interface.wfY
@@ -346,7 +369,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				<< sn_interface.wheelDelta
 				<< " fps "
 				<< sn_interface.fps
-				<< std::endl;
+				<< std::endl;*/
 
 
 		break;
@@ -357,8 +380,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED))
 			{
 				sn_interface.ChangeSize(LOWORD(lParam),HIWORD(lParam));
+				std::cout << "WM_SIZE CHANGE SIZE" << std::endl;
 			}
+			//sn_interface.ChangeSize(LOWORD(lParam),HIWORD(lParam));
 		}
+		else
+		std::cout << "WM_SIZE SIZE_MINIMIZED"<< std::endl;
 		break;
 	case WM_GETMINMAXINFO:
 	{
@@ -368,9 +395,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		break;
 	}
 	case WM_ENTERSIZEMOVE:
+		std::cout << "WM_ENTERSIZEMOVE"<< std::endl;
 		sn_interface.resizing = true;
 		break;
 	case WM_EXITSIZEMOVE:
+		std::cout << "WM_EXITSIZEMOVE"<< std::endl;
 		sn_interface.resizing = false;
 		break;
 	}
@@ -448,6 +477,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		hInstance,
 		NULL);
 
+	sn_Wulkaninit(hInstance,window);
+	
 	if (fullscreen)
 	{
 		// Center on screen
@@ -461,7 +492,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	SetForegroundWindow(window);
 	SetFocus(window);
 	
-	sn_Wulkaninit(hInstance,window);
+	
 
 	RAWINPUTDEVICE Rid[2];
         
@@ -472,7 +503,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 	Rid[1].usUsagePage = 0x01;          // HID_USAGE_PAGE_GENERIC
 	Rid[1].usUsage = 0x06;              // HID_USAGE_GENERIC_KEYBOARD
-	Rid[1].dwFlags = RIDEV_NOLEGACY;    // adds keyboard and also ignores legacy keyboard messages
+	Rid[1].dwFlags = 0; //RIDEV_NOLEGACY;    // adds keyboard and also ignores legacy keyboard messages
 	Rid[1].hwndTarget = window;
 
 	if (RegisterRawInputDevices(Rid, 2, sizeof(Rid[0])) == FALSE)
@@ -484,21 +515,23 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	MSG msg;
 	bool quitMessageReceived = false;
 	while (!quitMessageReceived) {
+		
 		sn_interface.Tick();
 		sn_Vulkandraw();
+		
 		while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 			
 			if (msg.message == WM_QUIT) {
 				quitMessageReceived = true;
-				sn_Vulkandestroy();
 				break;
 			}
 			
+			
 		}
 	}
-
+	sn_Vulkandestroy();
     return 0;
 }
 
@@ -556,12 +589,6 @@ struct Camera
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define USE_IMGUI_PLEASE_IFYOUCAN
-#ifdef USE_IMGUI_PLEASE_IFYOUCAN
-#include "imgui.h"
-#include "imgui_impl_vulkan.h"
-#endif
-
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_win32.h>
 
@@ -598,7 +625,7 @@ struct snVulkan
     VkQueue graphicsQueue;
     VkQueue presentQueue;
     VkRenderPass renderPass;
-	VkRenderPass renderPass_imgui;
+	//VkRenderPass renderPass_imgui;
 
 	//MEMORY
 	VkDescriptorPool descriptorPool;
@@ -606,6 +633,7 @@ struct snVulkan
 	VkDescriptorPool imgui_pDescriptorPool;
 	VkCommandPool imgui_CommandPool;
 	VkCommandBuffer imgui_CommandBuffer;
+	VkRenderPass imgui_renderPass;
 	#endif
 	
 
@@ -642,19 +670,16 @@ struct PipeModel{
 	void PipeModel_CreateBindings(size_t numbers)
 		{
         	set_layout.bindingCount = numbers;
-			pipelineLayoutInfo.setLayoutCount = numbers;
+			pipelineLayoutInfo.setLayoutCount = 1;
 			bindings = new VkDescriptorSetLayoutBinding[set_layout.bindingCount];
 			for(volatile int i = 0; i < set_layout.bindingCount; i++)
 				{
 				//Segmentation fault prevention 1
 				memset(&bindings[i],0,sizeof(VkDescriptorSetLayoutBinding));
 				bindings[i].binding = 0;
-			
 				bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 				bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-
 				bindings[i].descriptorCount = 1;
-				
 				bindings[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 				bindings[i].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 				bindings[i].pImmutableSamplers = NULL;
@@ -802,6 +827,16 @@ struct PipeModel{
 };
 void EcranOn();
 void EcranOff();
+
+static void check_vk_result(VkResult err)
+{
+    if (err == 0)
+        return;
+    fprintf(stderr, "[vulkan] Error: VkResult = %d\n", err);
+    if (err < 0)
+        abort();
+}
+
 void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
 {
     std::vector<const char*> extensions;
@@ -980,16 +1015,17 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
                 vkGetPhysicalDeviceSurfacePresentModesKHR(carte_graphique, surface, &presentModeCount, presentModes.data());
             }
 
-		VkDescriptorPoolSize descriptorPoolSizes;
-		
-		descriptorPoolSizes.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		descriptorPoolSizes.descriptorCount = 10;
+		VkDescriptorPoolSize descriptorPoolSizes[] =
+		{	{ VK_DESCRIPTOR_TYPE_SAMPLER, 10 },
+			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 },
+			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 10 }
+		};
 
 		VkDescriptorPoolCreateInfo descriptorPoolCI = {};
 			descriptorPoolCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-			descriptorPoolCI.maxSets = 10;
-			descriptorPoolCI.poolSizeCount = 1;
-			descriptorPoolCI.pPoolSizes = &descriptorPoolSizes;
+			descriptorPoolCI.maxSets = 10 * (sizeof(descriptorPoolSizes)/sizeof(*descriptorPoolSizes));
+			descriptorPoolCI.poolSizeCount = (uint32_t)(sizeof(descriptorPoolSizes)/sizeof(*descriptorPoolSizes));
+			descriptorPoolCI.pPoolSizes = descriptorPoolSizes;
 	
 		err = vkCreateDescriptorPool(device, &descriptorPoolCI, nullptr, &descriptorPool);
 
@@ -1001,30 +1037,35 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
         ImGui::StyleColorsDark();
         //ImGui_ImplGlfw_InitForVulkan(window, true);
+		// Setup scaling
+    	// Make process DPI aware and obtain main monitor scale
+   		ImGui_ImplWin32_EnableDpiAwareness();
+    	float main_scale = ImGui_ImplWin32_GetDpiScaleForMonitor(::MonitorFromPoint(POINT{ 0, 0 }, MONITOR_DEFAULTTOPRIMARY));
+	
+		ImGuiStyle& style = ImGui::GetStyle();
+    	style.ScaleAllSizes(main_scale);        // Bake a fixed style scale. (until we have a solution for dynamic style scaling, changing this requires resetting Style + calling this again)
+    	style.FontScaleDpi = main_scale;    
 
-        VkDescriptorPoolSize pool_sizes[] =
-        {
-            { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
-            { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
-            { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
-            { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
-        };
-            VkDescriptorPoolCreateInfo pool_info = {};
-       
-            pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-            pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-            pool_info.maxSets = 1000 * IM_ARRAYSIZE(pool_sizes);
-            pool_info.poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes);
-            pool_info.pPoolSizes = pool_sizes;
-            err = vkCreateDescriptorPool(device, &pool_info, NULL, &imgui_pDescriptorPool);
-		#endif
+        // Create Descriptor Pool
+    	// If you wish to load e.g. additional textures you may need to alter pools sizes and maxSets.
+		{
+			static VkAllocationCallbacks*   g_Allocator = nullptr;
+			VkDescriptorPoolSize pool_sizes[] =
+			{
+				{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE },
+			};
+			VkDescriptorPoolCreateInfo pool_info = {};
+			pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+			pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+			pool_info.maxSets = 0;
+			for (VkDescriptorPoolSize& pool_size : pool_sizes)
+				pool_info.maxSets += pool_size.descriptorCount;
+			pool_info.poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes);
+			pool_info.pPoolSizes = pool_sizes;
+			err = vkCreateDescriptorPool(device, &pool_info, g_Allocator, &imgui_pDescriptorPool);
+			check_vk_result(err);
+		}
+		
 		
 		swap_imageCount = capabilities.minImageCount + 1;
 
@@ -1032,30 +1073,8 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
 				swap_imageCount = capabilities.maxImageCount;
 			}
 
-		EcranOn();
-
-		#ifdef USE_IMGUI_PLEASE_IFYOUCAN           
-            VkCommandPoolCreateInfo poolInfo{};
-			poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-			poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-			poolInfo.queueFamilyIndex = graphicsFamily;
-
-			if (vkCreateCommandPool(device, &poolInfo, nullptr, &imgui_CommandPool) != VK_SUCCESS) {
-				throw std::runtime_error("failed to create command pool!");
-			}
-			
-			VkCommandBufferAllocateInfo allocInfo{};
-			allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-			allocInfo.commandPool = imgui_CommandPool;
-			allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-			allocInfo.commandBufferCount = 1;
-
-			if (vkAllocateCommandBuffers(device, &allocInfo, &imgui_CommandBuffer) != VK_SUCCESS) {
-				throw std::runtime_error("failed to allocate command buffers!");
-			}
-			
+							
 			VkAttachmentDescription Attachments{};
-			
 
             Attachments.format = VK_FORMAT_B8G8R8A8_UNORM;
             Attachments.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -1083,7 +1102,7 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
             renderPassInfo_imgui.pSubpasses = &subpass;
             renderPassInfo_imgui.dependencyCount = 0;
 
-            err = vkCreateRenderPass(device, &renderPassInfo_imgui, nullptr, &renderPass_imgui);
+            err = vkCreateRenderPass(device, &renderPassInfo_imgui, nullptr, &imgui_renderPass);
             if( err!= VK_SUCCESS){
                     throw std::runtime_error("failed to create render pass!!");
                 }
@@ -1093,34 +1112,22 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
             dearimgui.Device = device;
             dearimgui.PhysicalDevice = carte_graphique;  
             dearimgui.ImageCount = swap_imageCount;
-            dearimgui.MinImageCount = capabilities.minImageCount;
+            dearimgui.MinImageCount = swap_imageCount;
             dearimgui.Queue = graphicsQueue;
-            dearimgui.QueueFamily = 0;
+            dearimgui.QueueFamily = graphicsFamily;
             dearimgui.DescriptorPool = imgui_pDescriptorPool;
-			dearimgui.PipelineInfoMain.RenderPass = renderPass_imgui;
+			dearimgui.PipelineInfoMain.RenderPass = imgui_renderPass;
+			dearimgui.PipelineInfoMain.Subpass = 0;
+			dearimgui.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+			dearimgui.CheckVkResultFn = check_vk_result;
         
-        ImGui_ImplVulkan_Init(&dearimgui);
-        // Upload Fonts
-            {
-                // Use any command queue
-                
-  /*              VkCommandBuffer command_buffer = imgui_CommandBuffer;
-                err = vkResetCommandPool(device, imgui_CommandPool, 0);
-                VkCommandBufferBeginInfo begin_info = {};
-                begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-                begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-                err = vkBeginCommandBuffer(command_buffer, &begin_info);
-                ImGui_ImplVulkan_CreateFontsTexture(command_buffer);
-                VkSubmitInfo end_info = {};
-                end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-                end_info.commandBufferCount = 1;
-                end_info.pCommandBuffers = &command_buffer;
-                err = vkEndCommandBuffer(command_buffer);
-                err = vkQueueSubmit(graphicsQueue, 1, &end_info, VK_NULL_HANDLE);
-                err = vkDeviceWaitIdle(device);
-                ImGui_ImplVulkan_DestroyFontUploadObjects();*/
-			}
+        
+        ImGui_ImplWin32_Init(hwnd);
+		ImGui_ImplVulkan_Init(&dearimgui);
 		#endif
+		
+		
+		EcranOn();
 		rebuild(false);
 }
 uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) 
@@ -1166,7 +1173,7 @@ void CreateCopyBuffer(void *Src,uint32_t size){
             mem_info.memoryTypeIndex = findMemoryType(mem_reqs.memoryTypeBits, 
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                 VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-            mem_info.allocationSize = size;
+            mem_info.allocationSize = mem_reqs.size;
     err = vkAllocateMemory(device,&mem_info,nullptr,&mem);
     err = vkBindBufferMemory(device, buffer, mem, 0);
     //Buffer mapping and copy
@@ -1194,13 +1201,10 @@ void sn_Vulkandestroy()
 	   	ImGui_ImplVulkan_Shutdown();
 		vkFreeCommandBuffers(device,imgui_CommandPool,1,&imgui_CommandBuffer);
 		vkDestroyCommandPool(device, imgui_CommandPool, nullptr);
-		vkDestroyRenderPass(device, renderPass_imgui, nullptr);
+		vkDestroyRenderPass(device, imgui_renderPass, nullptr);
 	#endif
 
-       
-
-	
-	EcranOff();
+    EcranOff();
 	vkDestroyDescriptorPool(device,descriptorPool,NULL);  
 	vkDestroyDevice(device,NULL);
     vkDestroySurfaceKHR(instance,surface,NULL);
@@ -1380,15 +1384,13 @@ struct SnSwapChain
 	std::vector<VkImage>		swapChainImages;
     std::vector<VkImageView> 	swapChainImageViews;
     std::vector<VkFramebuffer> 	swapChainFramebuffers;
-    
-	VkSemaphore imageAvailableSemaphore;
-    VkSemaphore renderFinishedSemaphore;
-    VkFence inFlightFence;
 	
 	VkCommandPool commandPool;
-	VkCommandBuffer SN_ARRAY_BY_FRAME 		*commandBuffers = nullptr; 				
+	VkCommandBuffer SN_ARRAY_BY_FRAME 		*commandBuffers = nullptr; 		
+	VkCommandPool imgui_commandPool;
+	VkCommandBuffer SN_ARRAY_BY_FRAME 		*imgui_commandBuffers = nullptr; 				
 	
-	VkDescriptorSetLayout SN_ARRAY_BY_FRAME	*setlayouts = nullptr; 			
+	VkDescriptorSetLayout 					descriptorSetLayout; 
 	VkDescriptorSet SN_ARRAY_BY_FRAME 		*descriptorsets = nullptr; 			
 	
 	Uniform SN_ARRAY_BY_FRAME 				*uniforms = nullptr; 							//[] BY FRAMES
@@ -1396,6 +1398,12 @@ struct SnSwapChain
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
 
+	//SYNCHRO
+	
+	std::vector<VkSemaphore> imageAvailableSemaphores;
+    std::vector<VkSemaphore> renderFinishedSemaphores;
+    std::vector<VkFence> inFlightFences;
+    uint32_t currentFrame = 0;
 	
 
 	//Memory
@@ -1430,8 +1438,10 @@ struct SnSwapChain
 		pm.bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 		pm.bindings[0].descriptorCount = 1;
 
-		pm.pipelineLayoutInfo.setLayoutCount = swap_imageCount; //un par frame
-		pm.pipelineLayoutInfo.pSetLayouts = setlayouts; //<---- Ils servent ici un
+		
+		
+		pm.pipelineLayoutInfo.setLayoutCount = 1; //un par frame
+		pm.pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout; //<---- Ils servent ici un
 		
 		pm.PipeModel_Proceed(renderPass);
 
@@ -1484,67 +1494,59 @@ struct SnSwapChain
 		descriptorLayoutCI.pBindings = &setLayoutBindings;
 
 		//Le modèle des modèles 
-		VkDescriptorSetLayout descriptorSetLayout; //
+		
 		
 		err = vkCreateDescriptorSetLayout(device, &descriptorLayoutCI, nullptr, &descriptorSetLayout);
 		if( err!= VK_SUCCESS){throw std::runtime_error("failed to create descriptor set layout!");}
 		
 		descriptorsets = new VkDescriptorSet[swap_imageCount];
 		//Les sets de ce modéle un par frame
-		setlayouts = new VkDescriptorSetLayout[swap_imageCount];
-
-		for (size_t i = 0; i < swap_imageCount; i++)setlayouts[i] = descriptorSetLayout;
 		
-		VkDescriptorSetAllocateInfo allocateInfo{};
-		allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		allocateInfo.descriptorPool = descriptorPool;
-		allocateInfo.descriptorSetCount = swap_imageCount;
-		allocateInfo.pSetLayouts = setlayouts;
-		
-		err = vkAllocateDescriptorSets(device, &allocateInfo, descriptorsets);
-		if( err!= VK_SUCCESS){throw std::runtime_error("failed to allocate descriptor sets!");}
-		
-		vkDestroyDescriptorSetLayout(device,descriptorSetLayout,NULL);
-		
-		VkWriteDescriptorSet writeDescriptorSets[swap_imageCount];
-		VkDescriptorBufferInfo Buffer_info_UBO[swap_imageCount];
-
 		for (size_t i = 0; i < swap_imageCount; i++) 
 		{	
-			Buffer_info_UBO[i].buffer = uniforms[i].buffer;
-			Buffer_info_UBO[i].offset = 0;
-			Buffer_info_UBO[i].range = uniforms[i].mem_size;
-
-			memset(&writeDescriptorSets[i],0,sizeof(VkWriteDescriptorSet));
-			writeDescriptorSets[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			writeDescriptorSets[i].dstSet = descriptorsets[i];
-			writeDescriptorSets[i].dstBinding = 0;
-			writeDescriptorSets[i].dstArrayElement = 0;
-			writeDescriptorSets[i].descriptorCount = 1;
-			writeDescriptorSets[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			writeDescriptorSets[i].pBufferInfo = &Buffer_info_UBO[i];
+			VkDescriptorSetAllocateInfo allocateInfo{};
+			allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			allocateInfo.descriptorPool = descriptorPool;
+			allocateInfo.descriptorSetCount = 1;
+			allocateInfo.pSetLayouts = &descriptorSetLayout;
 			
-		}
-
-		vkUpdateDescriptorSets(device, swap_imageCount, writeDescriptorSets, 0, nullptr);
+			err = vkAllocateDescriptorSets(device, &allocateInfo, &descriptorsets[i]);
+			if( err!= VK_SUCCESS){throw std::runtime_error("failed to allocate descriptor sets!");}
+			
+			VkWriteDescriptorSet writeDescriptorSets;
+			VkDescriptorBufferInfo Buffer_info_UBO;
+			VkCopyDescriptorSet readDescriptorSets;
 		
+			Buffer_info_UBO.buffer = uniforms[i].buffer;
+			Buffer_info_UBO.offset = 0;
+			Buffer_info_UBO.range = uniforms[i].mem_size;
+
+			writeDescriptorSets.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeDescriptorSets.dstSet = descriptorsets[i];
+			writeDescriptorSets.dstBinding = 0;
+			writeDescriptorSets.dstArrayElement = 0;
+			writeDescriptorSets.descriptorCount = 1;
+			writeDescriptorSets.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			writeDescriptorSets.pBufferInfo = &Buffer_info_UBO;
+			
+			vkUpdateDescriptorSets(device, 1, &writeDescriptorSets, 0, nullptr);
+		}
 		
     }
+
 	void DestroyDescriptors()
     {
-        vkDeviceWaitIdle(device);
-		
-		for (size_t i = 0; i < swap_imageCount; i++) 
-		{	
-			vkDestroyDescriptorSetLayout(device,setlayouts[i],NULL);
-		}
+		vkDeviceWaitIdle(device);
+		vkFreeDescriptorSets(device,descriptorPool,swap_imageCount,descriptorsets);
 		delete [] descriptorsets;
+		
+		vkDestroyDescriptorSetLayout(device,descriptorSetLayout,NULL);
     }
 	
 	
 	void Create_SWAPCHAIN(){
 		VkSurfaceFormatKHR surfaceFormat = {
-			VK_FORMAT_B8G8R8A8_SRGB,
+			VK_FORMAT_R8G8B8A8_UNORM,//VK_FORMAT_B8G8R8A8_SRGB,
 			VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
 		};
 		VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
@@ -1629,7 +1631,7 @@ struct SnSwapChain
 			colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 			colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 			colorAttachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; //VK_IMAGE_LAYOUT_UNDEFINED;
-			colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+			colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 			//Mode clear activé
 			colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -1714,6 +1716,10 @@ struct SnSwapChain
 				throw std::runtime_error("failed to create command pool!");
 			}
 
+			if (vkCreateCommandPool(device, &poolInfo, nullptr, &imgui_commandPool) != VK_SUCCESS) {
+				throw std::runtime_error("failed to create command pool!");
+			}
+
 			VkCommandBufferAllocateInfo allocInfo{};
 			allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 			allocInfo.commandPool = commandPool;
@@ -1726,6 +1732,13 @@ struct SnSwapChain
 			if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers) != VK_SUCCESS) {
 				throw std::runtime_error("failed to allocate command buffers!");
 			}
+
+			imgui_commandBuffers = new VkCommandBuffer[swap_imageCount];
+			
+			if (vkAllocateCommandBuffers(device, &allocInfo, imgui_commandBuffers) != VK_SUCCESS) {
+				throw std::runtime_error("failed to allocate command buffers!");
+			}
+		
 	//------------------------------------------------------------------------------------------------------------------------------
 	//-------------------------------------------------------------------------------------------------------------------------------		
 	//-------------------------------------------------------------------------------------------------------------------------------		
@@ -1733,7 +1746,6 @@ struct SnSwapChain
 	//-------------------------------------------------------------------------------------------------------------------------------		
 	//-------------------------------------------------------------------------------------------------------------------------------		
 	//-------------------------------------------------------------------------------------------------------------------------------		
-	
 	//-------------------------------------------------------------------------------------------------------------------------------		
 	//-------------------------------------------------------------------------------------------------------------------------------		
 	//------------------------------------------------------------------------------------------------------------------------------
@@ -1747,7 +1759,7 @@ struct SnSwapChain
 	//-------------------------------------------------------------------------------------------------------------------------------		
 		
 	for (size_t i = 0; i < swap_imageCount; i++) 
-	{	
+		{	
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		
@@ -1793,18 +1805,6 @@ struct SnSwapChain
 		if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS) {
 			throw std::runtime_error("failed to record command buffer!");
 		}
-	}
-		VkSemaphoreCreateInfo semaphoreInfo{};
-		semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-		VkFenceCreateInfo fenceInfo{};
-		fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-		fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-		if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphore) != VK_SUCCESS ||
-			vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphore) != VK_SUCCESS ||
-			vkCreateFence(device, &fenceInfo, nullptr, &inFlightFence) != VK_SUCCESS) {
-			throw std::runtime_error("failed to create synchronization objects for a frame!");
 		}
 	}
 //------------------------------------------------------------------------------------------------------------------------------
@@ -1830,11 +1830,11 @@ void Destroy_SWAPCHAIN(){
         
 		vkFreeCommandBuffers(device,commandPool,swap_imageCount,commandBuffers);
 		delete [] commandBuffers;
-		
-		vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
-        vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
-        vkDestroyFence(device, inFlightFence, nullptr);
-        vkDestroyCommandPool(device, commandPool, nullptr);
+		vkFreeCommandBuffers(device,imgui_commandPool,swap_imageCount,imgui_commandBuffers);
+		delete [] imgui_commandBuffers;
+		        
+		vkDestroyCommandPool(device, commandPool, nullptr);
+		vkDestroyCommandPool(device, imgui_commandPool, nullptr);
 
         for (auto framebuffer : swapChainFramebuffers) {
             vkDestroyFramebuffer(device, framebuffer, nullptr);
@@ -1849,10 +1849,47 @@ void Destroy_SWAPCHAIN(){
             
         vkDestroySwapchainKHR(device, swapChain, nullptr);
     }
+	
+	void CreateSyncObjects() {
+        imageAvailableSemaphores.resize(swap_imageCount);
+        renderFinishedSemaphores.resize(swap_imageCount);
+        inFlightFences.resize(swap_imageCount);
+
+        VkSemaphoreCreateInfo semaphoreInfo{};
+        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+        VkFenceCreateInfo fenceInfo{};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+        for (size_t i = 0; i < swap_imageCount; i++) {
+            if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]) != VK_SUCCESS ||
+                vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS ||
+                vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS) {
+                throw std::runtime_error("failed to create synchronization objects for a frame!");
+            }
+        }
+    }
+	
+	void DestroySyncObjects() {
+        for (size_t i = 0; i < swap_imageCount; i++)
+		{
+            vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
+            vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
+            vkDestroyFence(device, inFlightFences[i], nullptr);
+        }
+    }
+	
+	void CreateImgui()
+	{
+
+
+	}	
 	void LightUp()
 	{
 		CreateBuffers();
 		CreateDescriptors();
+		CreateSyncObjects();
 	}
 }ECRAN;
 void EcranOn()
@@ -1864,6 +1901,7 @@ void EcranOff()
 	ECRAN.Destroy_SWAPCHAIN();
 	ECRAN.DestroyDescriptors();
 	ECRAN.DestroyBuffers();
+	
 }
 void rebuild(bool rebuild)
 	{  	
@@ -1871,10 +1909,10 @@ void rebuild(bool rebuild)
 		if(rebuild)ECRAN.Destroy_SWAPCHAIN();
 		ECRAN.Create_SWAPCHAIN();
 	}
-	static float horloge = 0.0f;
 
 void Update_uniforms(uint32_t imageIndex){     
 
+		static float horloge = 0.f;
 		horloge += sn_interface.delta_time;// * glm::two_pi<float>();
 		
 		glm::mat4 Model = glm::mat4(1.0f);//glm::rotate(glm::mat4(1.0f), horloge, glm::vec3(0, 0, 1.f));
@@ -1887,22 +1925,36 @@ void Update_uniforms(uint32_t imageIndex){
 
 bool show_demo_window = true;
 bool show_another_window = false;
-ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+//ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 	
 void sn_Vulkandraw(){        
-	
-	vkWaitForFences(device, 1, &ECRAN.inFlightFence, VK_TRUE, UINT64_MAX);
-	vkResetFences(device, 1, &ECRAN.inFlightFence);
-
 	uint32_t imageIndex;
-	err = vkAcquireNextImageKHR(device, ECRAN.swapChain, UINT64_MAX, ECRAN.imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
-		if(err == VK_ERROR_OUT_OF_DATE_KHR || sn_interface.resizing)
+	err = vkAcquireNextImageKHR(device, 
+								ECRAN.swapChain, 
+								UINT64_MAX, 
+								ECRAN.imageAvailableSemaphores[ECRAN.currentFrame], 
+								VK_NULL_HANDLE, 
+								&imageIndex);
+		if(err == VK_ERROR_OUT_OF_DATE_KHR)
 			{
+				std::cout << "VK_ERROR_OUT_OF_DATE_KHR" << std::endl;
 				sn_interface.resizing = false;
 				rebuild(true);
 				return;
-			}
+			}else if (err != VK_SUCCESS && err != VK_SUBOPTIMAL_KHR) {
+            throw std::runtime_error("failed to acquire swap chain image!");
+        }
+	if(err == VK_ERROR_DEVICE_LOST)std::cout << "VK_ERROR_DEVICE_LOST" << std::endl;
+	if(err == VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT)std::cout << "VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT" << std::endl;
+	if(err == VK_ERROR_OUT_OF_DATE_KHR)std::cout << "VK_ERROR_OUT_OF_DATE_KHR" << std::endl;
+	if(err == VK_ERROR_OUT_OF_DEVICE_MEMORY)std::cout << "VK_ERROR_OUT_OF_DEVICE_MEMORY" << std::endl;
+	if(err == VK_ERROR_OUT_OF_HOST_MEMORY)std::cout << "VK_ERROR_OUT_OF_HOST_MEMORY" << std::endl;
+	if(err == VK_ERROR_SURFACE_LOST_KHR)std::cout << "VK_ERROR_SURFACE_LOST_KHR" << std::endl;
+	if(err == VK_ERROR_UNKNOWN)std::cout << "VK_ERROR_UNKNOWN" << std::endl;
 
+	vkWaitForFences(device, 1, &ECRAN.inFlightFences[ECRAN.currentFrame], VK_TRUE, UINT64_MAX);
+	vkResetFences(device, 1, &ECRAN.inFlightFences[ECRAN.currentFrame]);
+	//if(err == VK_ERROR_VALIDATION_FAILED)std::cout << "VK_ERROR_VALIDATION_FAILED" << std::endl;
 	// OFFLINE (1340)
 		//vkBeginCommandBuffer
 		//vkCmdPipelineBarrier
@@ -1920,18 +1972,15 @@ void sn_Vulkandraw(){
 		//vkQueueSubmit
 		//vkQueuePresentKHR
 
+	
+#ifdef USE_IMGUI_PLEASE_IFYOUCAN
 		ImGuiIO& io = ImGui::GetIO();
 		
-
-    io.DisplaySize = ImVec2((float)sn_interface.destWidth, (float)sn_interface.destHeight);
-    io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
-	
-	io.DeltaTime = sn_interface.delta_time;
-	
-
-	// Start the Dear ImGui frame
+		// Start the Dear ImGui frame
         ImGui_ImplVulkan_NewFrame();
-        ImGui::NewFrame();
+		ImGui_ImplWin32_NewFrame();
+		ImGui::NewFrame();
+		
 		
         // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
         if (show_demo_window)
@@ -1948,13 +1997,18 @@ void sn_Vulkandraw(){
             ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
             ImGui::Checkbox("Another Window", &show_another_window);
 
+			static float clr_color[3] = {0.1f,0.6f,0.8f};
             ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-            ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
+            ImGui::ColorEdit3("clear color", (float*)&clr_color); // Edit 3 floats representing a color
 
             if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
                 counter++;
             ImGui::SameLine();
             ImGui::Text("counter = %d", counter);
+			ImGui::SameLine();
+            ImGui::Text("imageIndex = %d", imageIndex);
+			ImGui::SameLine();
+            ImGui::Text("ECRAN.currentFrame = %d", ECRAN.currentFrame);
 
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
             ImGui::End();
@@ -1972,71 +2026,95 @@ void sn_Vulkandraw(){
 
         // Rendering
         ImGui::Render();
+		
         ImDrawData* draw_data = ImGui::GetDrawData();
+		
         const bool is_minimized = (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f);
       
-     	err = vkResetCommandPool(device, imgui_CommandPool, 0);
+     	err = vkResetCommandPool(device, ECRAN.imgui_commandPool, 0);
         VkCommandBufferBeginInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        err = vkBeginCommandBuffer(imgui_CommandBuffer, &info);
+        err = vkBeginCommandBuffer(ECRAN.imgui_commandBuffers[ECRAN.currentFrame], &info);
       
     	VkClearValue clear_color = {};
 
         VkRenderPassBeginInfo RPinfo = {};
         
 		RPinfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        RPinfo.renderPass = renderPass_imgui;
-        RPinfo.framebuffer = ECRAN.swapChainFramebuffers[imageIndex];
+        RPinfo.renderPass = imgui_renderPass;
+        RPinfo.framebuffer = ECRAN.swapChainFramebuffers[ECRAN.currentFrame];
         RPinfo.renderArea.extent.width = sn_interface.destWidth;
         RPinfo.renderArea.extent.height = sn_interface.destHeight;
         RPinfo.clearValueCount = 1;
         RPinfo.pClearValues = &clear_color;
-        vkCmdBeginRenderPass(imgui_CommandBuffer, &RPinfo, VK_SUBPASS_CONTENTS_INLINE);
-    
-		// Record dear imgui primitives into command buffer
-		ImGui_ImplVulkan_RenderDrawData(draw_data, imgui_CommandBuffer);
-
-		// Submit command buffer
-		vkCmdEndRenderPass(imgui_CommandBuffer);
-		vkEndCommandBuffer(imgui_CommandBuffer);
 		
-	VkCommandBuffer cmdbfrs[2] = {ECRAN.commandBuffers[imageIndex],imgui_CommandBuffer};
+        vkCmdBeginRenderPass(ECRAN.imgui_commandBuffers[ECRAN.currentFrame], &RPinfo, VK_SUBPASS_CONTENTS_INLINE);
     
+		
+		// Record dear imgui primitives into command buffer
+		ImGui_ImplVulkan_RenderDrawData(draw_data, ECRAN.imgui_commandBuffers[ECRAN.currentFrame],VK_NULL_HANDLE);
+	
+		// Submit command buffer
+		vkCmdEndRenderPass(ECRAN.imgui_commandBuffers[ECRAN.currentFrame]);
+		err = vkEndCommandBuffer(ECRAN.imgui_commandBuffers[ECRAN.currentFrame]);
 
-	VkSemaphore waitSemaphores[] = {ECRAN.imageAvailableSemaphore};
-	VkSemaphore signalSemaphores[] = {ECRAN.renderFinishedSemaphore};
+		if(err != VK_SUCCESS)
+		{
+			throw std::runtime_error("Marche pas le vkEndCommandBuffer de Imgui!");
+		}
+	VkCommandBuffer batch[2] = {ECRAN.commandBuffers[ECRAN.currentFrame],ECRAN.imgui_commandBuffers[ECRAN.currentFrame]};
+	#else
+	VkCommandBuffer batch[1] = {ECRAN.commandBuffers[ECRAN.currentFrame]};
+    #endif
+
+
 	VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 	
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = waitSemaphores;
+	submitInfo.pWaitSemaphores = &ECRAN.imageAvailableSemaphores[ECRAN.currentFrame];
 	submitInfo.pWaitDstStageMask = waitStages;
+	
+	#ifdef USE_IMGUI_PLEASE_IFYOUCAN
 	submitInfo.commandBufferCount = 2;
-	submitInfo.pCommandBuffers = cmdbfrs;//&ECRAN.commandBuffers[imageIndex];
+	#else
+	submitInfo.commandBufferCount = 1;
+	#endif
+
+	submitInfo.pCommandBuffers = batch;//&ECRAN.commandBuffers[imageIndex];
 	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = signalSemaphores;
+	submitInfo.pSignalSemaphores = &ECRAN.renderFinishedSemaphores[ECRAN.currentFrame];
 
 	Update_uniforms(imageIndex);
 
-	vkQueueSubmit(graphicsQueue, 1, &submitInfo, ECRAN.inFlightFence);
-/*	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, ECRAN.inFlightFence) != VK_SUCCESS) {
-		throw std::runtime_error("failed to submit draw command buffer!");
-	}*/
+	err = vkQueueSubmit(graphicsQueue, 1, &submitInfo, ECRAN.inFlightFences[ECRAN.currentFrame]);
 
-	VkPresentInfoKHR presentInfo{};
-	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = signalSemaphores;
+	if (err != VK_SUCCESS) {
+            throw std::runtime_error("failed to submit draw command buffer!");
+        }
 
-	VkSwapchainKHR swapChains = ECRAN.swapChain;
-	presentInfo.swapchainCount = 1;
-	presentInfo.pSwapchains = &swapChains;
-	presentInfo.pImageIndices = &imageIndex;
+		//Tu vas attendre sur ce semaphore pour présenter l'image
+		VkPresentInfoKHR presentInfo{};
+		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+		presentInfo.waitSemaphoreCount = 1;
+		presentInfo.pWaitSemaphores = &ECRAN.imageAvailableSemaphores[ECRAN.currentFrame];
+		presentInfo.swapchainCount = 1;
+		presentInfo.pSwapchains = &ECRAN.swapChain;
+		presentInfo.pImageIndices = &ECRAN.currentFrame;
 
-	vkQueuePresentKHR(presentQueue, &presentInfo);
+		err = vkQueuePresentKHR(presentQueue, &presentInfo);
 
-	
+        if (err == VK_ERROR_OUT_OF_DATE_KHR || err == VK_SUBOPTIMAL_KHR) {
+          
+            sn_interface.resizing = false;
+			rebuild(true);
+        } else if (err != VK_SUCCESS) {
+            throw std::runtime_error("failed to present swap chain image!");
+        }
+		vkQueueWaitIdle(presentQueue);
+        ECRAN.currentFrame = (ECRAN.currentFrame + 1) % swap_imageCount;
+			
 }
 
