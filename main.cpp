@@ -6,33 +6,33 @@
 #include <iostream>
 #include <chrono>
 
-#define USE_IMGUI_PLEASE_IFYOUCAN
-#ifdef USE_IMGUI_PLEASE_IFYOUCAN
-#include "imgui.h"
-#include "imgui_impl_win32.h"
-#define VK_USE_PLATFORM_WIN32_KHR
-#include "imgui_impl_vulkan.h"
-#endif
-
+//Initialize pour win32
 void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd);
+//Cleanup
 void sn_Vulkandestroy();
+//Acquire and present
 void sn_Vulkandraw();
       
-#define DELAY_FAST 250000
+#define DELAY_FAST 0.15f
+//#define USE_THREAD
 
+//Chaque touche et bouton
 struct sn_Key
 {
 	bool pressed = false;
 	bool fastclick = false;
 	long long timestamp = 0;
-	long duration = 0;
+	float duration = 0;
 
 void input_pressed(long time)
 	{																				
 	if(duration < DELAY_FAST)
 		fastclick = true;
-	duration = 0;
-	pressed = true;
+	if(!pressed)
+		{
+		duration = 0.f;
+		pressed = true;
+		}
 	timestamp = time;
 	}
 
@@ -49,11 +49,6 @@ bool input_released(long time)
 	return false;
 	}
 };
-#define MOUSE_INPUT(x, maskpressed, maskreleased) \
-if(raw->data.mouse.usButtonFlags & maskpressed)MouseBt[x].input_pressed(timestamp); \
-if(raw->data.mouse.usButtonFlags & maskreleased)MouseBt[x].input_released(timestamp); 	
-
-
 
 struct sn_Interface
 {	
@@ -91,164 +86,16 @@ struct sn_Interface
 	
 	bool resizing = true;
 
-void Wmousemove(void)
-{
-	wfX = float(wX) / float(destWidth) * 2.f;
-	wfY = float(wY) / float(destHeight) * 2.f;
-	
-}
-void ChangeSize(unsigned short Width,unsigned short Height)
-{
-	
-	destWidth = Width;
-	destHeight = Height;
-	aspectratio = (float)Height/(float)Width;
-	aspectH = base / destWidth; 		
-	aspectV = base / Height; 
+void 		Wmousemove(void);
+void 		ChangeSize(unsigned short Width,unsigned short Height);
+long long 	Tick();
+bool 		Button_pressed(RAWINPUT* raw,int* pnum);
+void 		Mouse(RAWINPUT* raw, long timestamp);
+bool 		Keyboard(RAWINPUT* raw, long timestamp);
 
-	#ifdef USE_IMGUI_PLEASE_IFYOUCAN
-	ImGuiIO& io = ImGui::GetIO();
-    io.DisplaySize = ImVec2((float)destWidth, (float)destHeight);
-    io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
-	#endif
-	resizing = false;
-}
-
-long long Tick()
-	{
-	static LARGE_INTEGER Frequency;
-	static LARGE_INTEGER time_start;
-	static LARGE_INTEGER time_now;
-	static int pos = 0;
-	static float fpss[128];
-
-	if(_no_initialized)
-		{
-			QueryPerformanceFrequency(&Frequency); 
-			QueryPerformanceCounter(&time_start);
-			_no_initialized = false; 
-		}
-	
-	//Update time
-	
-	QueryPerformanceCounter(&time_now); 
-	time_now.QuadPart -= time_start.QuadPart;
-	time_now.QuadPart *= 1000000;
-	time_now.QuadPart /= Frequency.QuadPart;
-
-	long long Tick = time_now.QuadPart - c_start;
-	c_start = time_now.QuadPart;
-
-	fpss[pos] = (float)Tick;
-	fpss[pos] *= 0.000001f;
-	pos++;
-	if(pos>127)pos=0;
-	
-	fps = 0.0f;
-	for(volatile int i = 0; i < 128; i++)fps += fpss[i];
-	fps /= 128.0f;
-	delta_time = fps;
-	fps = 1.0f / delta_time; 
-#ifdef USE_IMGUI_PLEASE_IFYOUCAN
-	//ImGuiIO& io = ImGui::GetIO();
-	//io.DeltaTime = delta_time;
-#endif
-	if(MouseBt[0].pressed)MouseBt[0].duration = c_start - MouseBt[0].timestamp;
-	if(MouseBt[1].pressed)MouseBt[1].duration = c_start - MouseBt[1].timestamp;
-	if(MouseBt[2].pressed)MouseBt[2].duration = c_start - MouseBt[2].timestamp;
-	if(MouseBt[3].pressed)MouseBt[3].duration = c_start - MouseBt[3].timestamp;
-	if(MouseBt[4].pressed)MouseBt[4].duration = c_start - MouseBt[4].timestamp;
-	
-	for(volatile int i = 0; i < 256; i++)
-	{
-		if(Keys[i].pressed)
-		{
-			Keys[i].duration = c_start - Keys[i].timestamp;
-		}
-	}
-
-	return Tick;
-	}
-	bool Button_pressed(RAWINPUT* raw,int* pnum)
-	{
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_DOWN){*pnum=0;return true;}
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_UP){*pnum=0;return false;}
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_DOWN){*pnum=1;return true;}
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_UP){*pnum=1;return false;}
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_DOWN){*pnum=2;return true;}
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_UP){*pnum=2;return false;}
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_4_DOWN){*pnum=3;return true;}
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_4_UP){*pnum=3;return false;}
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_5_DOWN){*pnum=4;return true;}
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_5_UP){*pnum=4;return false;}
-		return false;
-	}
-	void Mouse(RAWINPUT* raw, long timestamp)
-	{
-		if(raw->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE)
-		{
-			mdY = raw->data.mouse.lLastY - mY;
-			mdX = raw->data.mouse.lLastX - mX;
-		}
-		else
-		{
-			mdY = raw->data.mouse.lLastY;
-			mdX = raw->data.mouse.lLastX;
-		}
-		mX = raw->data.mouse.lLastX;
-		mY = raw->data.mouse.lLastY;
-		radX += (float)mdX * 0.00152f;
-		radY += (float)mdY * 0.00152f;
-		if(radX > 1.f)radX = 1.f;
-		if(radX < -1.f)radX = -1.f;
-		if(radY > 1.f)radY = 1.f;
-		if(radY < -1.f)radY = -1.f;
-
-		MOUSE_INPUT(0, RI_MOUSE_LEFT_BUTTON_DOWN, RI_MOUSE_LEFT_BUTTON_UP)
-		MOUSE_INPUT(1, RI_MOUSE_RIGHT_BUTTON_DOWN, RI_MOUSE_RIGHT_BUTTON_UP)
-		MOUSE_INPUT(2, RI_MOUSE_MIDDLE_BUTTON_DOWN, RI_MOUSE_MIDDLE_BUTTON_UP)
-		MOUSE_INPUT(3, RI_MOUSE_BUTTON_4_DOWN, RI_MOUSE_BUTTON_4_UP)
-		MOUSE_INPUT(4, RI_MOUSE_BUTTON_5_DOWN, RI_MOUSE_BUTTON_5_UP)
-		
-		#ifdef USE_IMGUI_PLEASE_IFYOUCAN
-		int button = -1;
-		if(Button_pressed(raw,&button))
-		{
-		//ImGuiIO& io = ImGui::GetIO();
-		//io.AddMouseButtonEvent(button,true);
-		}
-		else if(button != -1)
-		{
-		//ImGuiIO& io = ImGui::GetIO();
-		//io.AddMouseButtonEvent(button,false);
-		}
-		#endif
-
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_WHEEL)
-		{
-			wheelDelta += (short)raw->data.mouse.usButtonData;
-			baseexp += ((float)(short)raw->data.mouse.usButtonData)*.001f;
-			aspectH = base / destWidth; 		
-			aspectV = base / destHeight; 
-			base = 400.f * exp(baseexp);
-		}
-	}
-bool Keyboard(RAWINPUT* raw, long timestamp)
-	{
-		if(raw->data.keyboard.Flags == 0)
-			Keys[raw->data.keyboard.MakeCode].input_pressed(timestamp);
-		else
-			return Keys[raw->data.keyboard.MakeCode].input_released(timestamp);
-		return false;
-	}
 }sn_interface;
 
-#ifdef USE_IMGUI_PLEASE_IFYOUCAN
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);   
-#endif
-
-
-
+bool run_vulkan = true;
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)						
 {																									\
 
@@ -261,6 +108,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	switch (uMsg)
 	{
 	case WM_CLOSE:
+		run_vulkan = false;
 		DestroyWindow(hWnd);
 		PostQuitMessage(0);
 		break;
@@ -289,6 +137,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 					<< " ExtraInformation=" << raw->data.keyboard.ExtraInformation	
 					<< " Message=" << raw->data.keyboard.Message
 					<< " VKey=" << raw->data.keyboard.VKey
+					<< " Time=" << sn_interface.Keys[raw->data.keyboard.MakeCode].duration
 					<< std::endl;
 		}
 		else if (raw->header.dwType == RIM_TYPEMOUSE) 
@@ -406,6 +255,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	return (DefWindowProc(hWnd, uMsg, wParam, lParam));												\
 }																			
 
+typedef struct MyData {
+    HWND hwnd;
+    HINSTANCE hinstance;
+} MYDATA, *PMYDATA;
+
+DWORD WINAPI MyThreadFunction( LPVOID lpParam );
+
+
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
     WNDCLASSEX wndClass;
@@ -487,12 +344,28 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		SetWindowPos(window, 0, x, y, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
 	}
 
-	//ShowCursor(FALSE);
+	ShowCursor(FALSE);
 	ShowWindow(window, SW_SHOW);
 	SetForegroundWindow(window);
 	SetFocus(window);
-	
-	
+
+#ifdef USE_THREAD
+	MYDATA pDataArray;
+	pDataArray.hinstance = hInstance;
+	pDataArray.hwnd = window;
+	DWORD   dwThreadIdArray;
+	HANDLE  hThreadArray = CreateThread( 
+            NULL,                   // default security attributes
+            0,                      // use default stack size  
+            MyThreadFunction,       // thread function name
+            &pDataArray,          	// argument to thread function 
+            0,                      // use default creation flags 
+            &dwThreadIdArray);   	// returns the thread identifier 
+#endif
+
+
+
+
 
 	RAWINPUTDEVICE Rid[2];
         
@@ -516,14 +389,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	bool quitMessageReceived = false;
 	while (!quitMessageReceived) {
 		
+#ifndef USE_THREAD		
 		sn_interface.Tick();
 		sn_Vulkandraw();
+#endif
 		
 		while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 			
 			if (msg.message == WM_QUIT) {
+				run_vulkan = false;
+				Sleep(100);
 				quitMessageReceived = true;
 				break;
 			}
@@ -531,13 +408,203 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			
 		}
 	}
+#ifndef USE_THREAD		
 	sn_Vulkandestroy();
+#endif
+
     return 0;
 }
+
+DWORD WINAPI MyThreadFunction( LPVOID lpParam ) 
+{ 
+   	HANDLE hStdout=GetStdHandle(STD_OUTPUT_HANDLE);
+	PMYDATA pDataArray = (PMYDATA)lpParam;
+	
+	//sn_Wulkaninit(pDataArray->hinstance,pDataArray->hwnd);
+
+	while (run_vulkan){
+		sn_interface.Tick();
+		sn_Vulkandraw();
+		}
+	sn_Vulkandestroy();
+    return 0; 
+} 
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define USE_IMGUI_PLEASE_IFYOUCAN
+#ifdef USE_IMGUI_PLEASE_IFYOUCAN
+#include "imgui.h"
+#include "imgui_impl_win32.h"
+#define VK_USE_PLATFORM_WIN32_KHR
+#include "imgui_impl_vulkan.h"
+#endif
 
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
 
+void sn_Interface::Wmousemove(void)
+{
+	wfX = float(wX) / float(destWidth) * 2.f;
+	wfY = float(wY) / float(destHeight) * 2.f;
+	
+}
+void sn_Interface::ChangeSize(unsigned short Width,unsigned short Height)
+{
+	
+	destWidth = Width;
+	destHeight = Height;
+	aspectratio = (float)Height/(float)Width;
+	aspectH = base / destWidth; 		
+	aspectV = base / Height; 
+
+	#ifdef USE_IMGUI_PLEASE_IFYOUCAN
+	ImGuiIO& io = ImGui::GetIO();
+    io.DisplaySize = ImVec2((float)destWidth, (float)destHeight);
+    io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
+	#endif
+	resizing = false;
+}
+
+long long sn_Interface::Tick()
+	{
+	static LARGE_INTEGER Frequency;
+	static LARGE_INTEGER time_start;
+	static LARGE_INTEGER time_now;
+	static int pos = 0;
+	static float fpss[128];
+
+	if(_no_initialized)
+		{
+			QueryPerformanceFrequency(&Frequency); 
+			QueryPerformanceCounter(&time_start);
+			_no_initialized = false; 
+		}
+	
+	//Update time
+	
+	QueryPerformanceCounter(&time_now); 
+	time_now.QuadPart -= time_start.QuadPart;
+	time_now.QuadPart *= 1000000;
+	time_now.QuadPart /= Frequency.QuadPart;
+
+	long long Tick = time_now.QuadPart - c_start;
+	c_start = time_now.QuadPart;
+
+	fpss[pos] = (float)Tick;
+	fpss[pos] *= 0.000001f;
+	pos++;
+	if(pos>127)pos=0;
+	
+	fps = 0.0f;
+	for(volatile int i = 0; i < 128; i++)fps += fpss[i];
+	fps /= 128.0f;
+	delta_time = fps;
+	fps = 1.0f / delta_time; 
+#ifdef USE_IMGUI_PLEASE_IFYOUCAN
+	//ImGuiIO& io = ImGui::GetIO();
+	//io.DeltaTime = delta_time;
+#endif
+	if(MouseBt[0].pressed)MouseBt[0].duration = c_start - MouseBt[0].timestamp;
+	if(MouseBt[1].pressed)MouseBt[1].duration = c_start - MouseBt[1].timestamp;
+	if(MouseBt[2].pressed)MouseBt[2].duration = c_start - MouseBt[2].timestamp;
+	if(MouseBt[3].pressed)MouseBt[3].duration = c_start - MouseBt[3].timestamp;
+	if(MouseBt[4].pressed)MouseBt[4].duration = c_start - MouseBt[4].timestamp;
+	
+	for(volatile int i = 0; i < 256; i++)
+	{
+		if(Keys[i].pressed)
+		{
+			Keys[i].duration += delta_time;
+		}
+	}
+
+	return Tick;
+	}
+	bool sn_Interface::Button_pressed(RAWINPUT* raw,int* pnum)
+	{
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_DOWN){*pnum=0;return true;}
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_UP){*pnum=0;return false;}
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_DOWN){*pnum=1;return true;}
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_UP){*pnum=1;return false;}
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_DOWN){*pnum=2;return true;}
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_UP){*pnum=2;return false;}
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_4_DOWN){*pnum=3;return true;}
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_4_UP){*pnum=3;return false;}
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_5_DOWN){*pnum=4;return true;}
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_5_UP){*pnum=4;return false;}
+		return false;
+	}
+	
+	#define MOUSE_INPUT(x, maskpressed, maskreleased) \
+	if(raw->data.mouse.usButtonFlags & maskpressed)MouseBt[x].input_pressed(timestamp); \
+	if(raw->data.mouse.usButtonFlags & maskreleased)MouseBt[x].input_released(timestamp); 	
+
+	void sn_Interface::Mouse(RAWINPUT* raw, long timestamp)
+	{
+		if(raw->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE)
+		{
+			mdY = raw->data.mouse.lLastY - mY;
+			mdX = raw->data.mouse.lLastX - mX;
+		}
+		else
+		{
+			mdY = raw->data.mouse.lLastY;
+			mdX = raw->data.mouse.lLastX;
+		}
+		mX = raw->data.mouse.lLastX;
+		mY = raw->data.mouse.lLastY;
+		radX += (float)mdX * 0.00152f;
+		radY += (float)mdY * 0.00152f;
+		if(radX > 1.f)radX = 1.f;
+		if(radX < -1.f)radX = -1.f;
+		if(radY > 1.f)radY = 1.f;
+		if(radY < -1.f)radY = -1.f;
+
+		MOUSE_INPUT(0, RI_MOUSE_LEFT_BUTTON_DOWN, RI_MOUSE_LEFT_BUTTON_UP)
+		MOUSE_INPUT(1, RI_MOUSE_RIGHT_BUTTON_DOWN, RI_MOUSE_RIGHT_BUTTON_UP)
+		MOUSE_INPUT(2, RI_MOUSE_MIDDLE_BUTTON_DOWN, RI_MOUSE_MIDDLE_BUTTON_UP)
+		MOUSE_INPUT(3, RI_MOUSE_BUTTON_4_DOWN, RI_MOUSE_BUTTON_4_UP)
+		MOUSE_INPUT(4, RI_MOUSE_BUTTON_5_DOWN, RI_MOUSE_BUTTON_5_UP)
+		
+		#ifdef USE_IMGUI_PLEASE_IFYOUCAN
+		int button = -1;
+		if(Button_pressed(raw,&button))
+		{
+		//ImGuiIO& io = ImGui::GetIO();
+		//io.AddMouseButtonEvent(button,true);
+		}
+		else if(button != -1)
+		{
+		//ImGuiIO& io = ImGui::GetIO();
+		//io.AddMouseButtonEvent(button,false);
+		}
+		#endif
+
+		if(raw->data.mouse.usButtonFlags & RI_MOUSE_WHEEL)
+		{
+			wheelDelta += (short)raw->data.mouse.usButtonData;
+			baseexp += ((float)(short)raw->data.mouse.usButtonData)*.001f;
+			aspectH = base / destWidth; 		
+			aspectV = base / destHeight; 
+			base = 400.f * exp(baseexp);
+		}
+	}
+bool sn_Interface::Keyboard(RAWINPUT* raw, long timestamp)
+	{
+		if(raw->data.keyboard.Flags == 0)
+			Keys[raw->data.keyboard.MakeCode].input_pressed(timestamp);
+		else
+			return Keys[raw->data.keyboard.MakeCode].input_released(timestamp);
+		return false;
+	}
+	
 struct Vertex
 {
 	glm::vec3 position;
@@ -1028,6 +1095,7 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
 			descriptorPoolCI.pPoolSizes = descriptorPoolSizes;
 	
 		err = vkCreateDescriptorPool(device, &descriptorPoolCI, nullptr, &descriptorPool);
+		swap_imageCount = capabilities.minImageCount + 1;
 
 		#ifdef USE_IMGUI_PLEASE_IFYOUCAN
         IMGUI_CHECKVERSION();
@@ -1067,7 +1135,7 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
 		}
 		
 		
-		swap_imageCount = capabilities.minImageCount + 1;
+		
 
 		if (capabilities.maxImageCount > 0 && swap_imageCount > capabilities.maxImageCount) {
 				swap_imageCount = capabilities.maxImageCount;
@@ -1387,7 +1455,6 @@ struct SnSwapChain
 	
 	VkCommandPool commandPool;
 	VkCommandBuffer SN_ARRAY_BY_FRAME 		*commandBuffers = nullptr; 		
-	VkCommandPool imgui_commandPool;
 	VkCommandBuffer SN_ARRAY_BY_FRAME 		*imgui_commandBuffers = nullptr; 				
 	
 	VkDescriptorSetLayout 					descriptorSetLayout; 
@@ -1544,7 +1611,43 @@ struct SnSwapChain
     }
 	
 	
-	void Create_SWAPCHAIN(){
+	void SWAPCHAIN_MemoryBarrier(VkCommandBuffer buf,VkImage img,VkImageLayout de,VkImageLayout a)
+	{
+			VkImageMemoryBarrier memory_barrier = {};
+			memory_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			memory_barrier.srcAccessMask = 0;//VK_ACCESS_TRANSFER_WRITE_BIT;
+			memory_barrier.dstAccessMask = 0;//VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+			memory_barrier.oldLayout = de;  //>>>>>>>>>>
+			memory_barrier.newLayout = a;//>>>>>>>>>>
+			memory_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			memory_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			memory_barrier.image = img;//>>>>>>>>>>
+			memory_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;//>>>>>>>>>>
+			memory_barrier.subresourceRange.levelCount = 1;
+			memory_barrier.subresourceRange.layerCount = 1;
+
+			if(de == VK_IMAGE_LAYOUT_UNDEFINED && a == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+			{
+			memory_barrier.srcAccessMask = 0;//VK_ACCESS_TRANSFER_WRITE_BIT;
+			memory_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			vkCmdPipelineBarrier(buf,
+				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+				0,0,NULL,0,NULL,1,&memory_barrier);
+			}
+			
+			if(de == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && a == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+			{
+			memory_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;//VK_ACCESS_TRANSFER_WRITE_BIT;
+			memory_barrier.dstAccessMask = 0;
+			vkCmdPipelineBarrier(buf,
+				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+				VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+				0,0,NULL,0,NULL,1,&memory_barrier);
+			}
+	}
+	void SWAPCHAIN_Create(){
+		
 		VkSurfaceFormatKHR surfaceFormat = {
 			VK_FORMAT_R8G8B8A8_UNORM,//VK_FORMAT_B8G8R8A8_SRGB,
 			VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
@@ -1594,7 +1697,6 @@ struct SnSwapChain
 			
 			VkFormat swapChainImageFormat = surfaceFormat.format;
 			
-			std::vector<VkImageView> swapChainImageViews;
 			swapChainImageViews.resize(swapChainImages.size());
 
 			for (size_t i = 0; i < swapChainImages.size(); i++) {
@@ -1716,10 +1818,6 @@ struct SnSwapChain
 				throw std::runtime_error("failed to create command pool!");
 			}
 
-			if (vkCreateCommandPool(device, &poolInfo, nullptr, &imgui_commandPool) != VK_SUCCESS) {
-				throw std::runtime_error("failed to create command pool!");
-			}
-
 			VkCommandBufferAllocateInfo allocInfo{};
 			allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 			allocInfo.commandPool = commandPool;
@@ -1763,9 +1861,6 @@ struct SnSwapChain
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		
-		if (vkBeginCommandBuffer(commandBuffers[i], &beginInfo) != VK_SUCCESS) 
-			throw std::runtime_error("failed to begin recording command buffer!");
-
 		VkRenderPassBeginInfo renderPassBeginInfo{};
 		renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		renderPassBeginInfo.renderPass = renderPass;
@@ -1776,9 +1871,59 @@ struct SnSwapChain
 		VkClearValue clearColor = {{0.3f, 0.3f, 0.3f, 1.0f}};
 		renderPassBeginInfo.clearValueCount = 1;
 		renderPassBeginInfo.pClearValues = &clearColor;
+		
+		VkClearValue* pClearColor = &clearColor;
+		VkClearValue* pDepthValue = nullptr;
 
-		vkCmdBeginRenderPass(commandBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+		VkRenderingAttachmentInfoKHR Color = {};
+		VkRenderingAttachmentInfo Depth = {};
+
+		Color.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+		Color.imageView = swapChainImageViews[i];
+		Color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		Color.resolveMode = VK_RESOLVE_MODE_NONE;
+		Color.imageView = VK_NULL_HANDLE;
+		Color.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		Color.loadOp = pClearColor ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+		Color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+		if(pClearColor)
+		{
+			Color.clearValue = *pClearColor;
+		}
+		
+		Depth.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+		Depth.imageView = VK_NULL_HANDLE;
+		Depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		Depth.resolveMode = VK_RESOLVE_MODE_NONE;
+		Depth.resolveImageView = VK_NULL_HANDLE;
+		Depth.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		Depth.loadOp = pDepthValue ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+		Depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+		if(pDepthValue)
+		{
+			Depth.clearValue = *pDepthValue;
+		}
+
+		VkRenderingInfoKHR RenderingInfo = {};
+		RenderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+		RenderingInfo.renderArea = {{0,0},{sn_interface.destWidth,sn_interface.destHeight}};
+		RenderingInfo.layerCount = 0;
+		RenderingInfo.viewMask = 0;
+		RenderingInfo.colorAttachmentCount = 1;
+		RenderingInfo.pColorAttachments = &Color;
+		RenderingInfo.pDepthAttachment = &Depth;
+
+		if (vkBeginCommandBuffer(commandBuffers[i], &beginInfo) != VK_SUCCESS) 
+			throw std::runtime_error("failed to begin recording command buffer!");
+
+		//SWAPCHAIN_MemoryBarrier(commandBuffers[i],swapChainImages[i],VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);	
+		vkCmdBeginRenderPass(commandBuffers[i],&renderPassBeginInfo,VK_SUBPASS_CONTENTS_INLINE);
+			
+			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+
+		
 
 			VkViewport viewport{};
 			viewport.x = 0.0f;
@@ -1798,8 +1943,11 @@ struct SnSwapChain
 									VK_PIPELINE_BIND_POINT_GRAPHICS, 
 									pipelineLayout, 0, 1, &descriptorsets[i], 0, nullptr);
 
+			//vkCmdBeginRendering(commandBuffers[i],&RenderingInfo);
 			vkCmdDraw(commandBuffers[i], 3, 1, 0, 0);
-
+			//vkCmdEndRendering(commandBuffers[i]);
+	
+		//SWAPCHAIN_MemoryBarrier(commandBuffers[i],swapChainImages[i],VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 		vkCmdEndRenderPass(commandBuffers[i]);
 
 		if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS) {
@@ -1825,17 +1973,16 @@ struct SnSwapChain
 //-------------------------------------------------------------------------------------------------------------------------------		
 //-------------------------------------------------------------------------------------------------------------------------------		
 //-------------------------------------------------------------------------------------------------------------------------------	
-void Destroy_SWAPCHAIN(){
+void SWAPCHAIN_Destroy(){
 		
         
 		vkFreeCommandBuffers(device,commandPool,swap_imageCount,commandBuffers);
 		delete [] commandBuffers;
-		vkFreeCommandBuffers(device,imgui_commandPool,swap_imageCount,imgui_commandBuffers);
+		vkFreeCommandBuffers(device,commandPool,swap_imageCount,imgui_commandBuffers);
 		delete [] imgui_commandBuffers;
 		        
 		vkDestroyCommandPool(device, commandPool, nullptr);
-		vkDestroyCommandPool(device, imgui_commandPool, nullptr);
-
+	
         for (auto framebuffer : swapChainFramebuffers) {
             vkDestroyFramebuffer(device, framebuffer, nullptr);
             }
@@ -1850,7 +1997,7 @@ void Destroy_SWAPCHAIN(){
         vkDestroySwapchainKHR(device, swapChain, nullptr);
     }
 	
-	void CreateSyncObjects() {
+	void SyncObjectsCreate() {
         imageAvailableSemaphores.resize(swap_imageCount);
         renderFinishedSemaphores.resize(swap_imageCount);
         inFlightFences.resize(swap_imageCount);
@@ -1871,7 +2018,7 @@ void Destroy_SWAPCHAIN(){
         }
     }
 	
-	void DestroySyncObjects() {
+	void SyncObjectsDestroy() {
         for (size_t i = 0; i < swap_imageCount; i++)
 		{
             vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
@@ -1889,7 +2036,7 @@ void Destroy_SWAPCHAIN(){
 	{
 		CreateBuffers();
 		CreateDescriptors();
-		CreateSyncObjects();
+		SyncObjectsCreate();
 	}
 }ECRAN;
 void EcranOn()
@@ -1898,7 +2045,7 @@ void EcranOn()
 }
 void EcranOff()
 {
-	ECRAN.Destroy_SWAPCHAIN();
+	ECRAN.SWAPCHAIN_Destroy();
 	ECRAN.DestroyDescriptors();
 	ECRAN.DestroyBuffers();
 	
@@ -1906,14 +2053,17 @@ void EcranOff()
 void rebuild(bool rebuild)
 	{  	
 		vkDeviceWaitIdle(device);
-		if(rebuild)ECRAN.Destroy_SWAPCHAIN();
-		ECRAN.Create_SWAPCHAIN();
+		if(rebuild)ECRAN.SWAPCHAIN_Destroy();
+		ECRAN.SWAPCHAIN_Create();
 	}
+
+
+static float f = 0.0f;
 
 void Update_uniforms(uint32_t imageIndex){     
 
 		static float horloge = 0.f;
-		horloge += sn_interface.delta_time;// * glm::two_pi<float>();
+		horloge += sn_interface.delta_time * f;// * glm::two_pi<float>();
 		
 		glm::mat4 Model = glm::mat4(1.0f);//glm::rotate(glm::mat4(1.0f), horloge, glm::vec3(0, 0, 1.f));
 		glm::mat4 project = glm::scale(glm::mat4(1.0f), glm::vec3(sn_interface.aspectH, sn_interface.aspectV, 1.f));
@@ -1925,14 +2075,14 @@ void Update_uniforms(uint32_t imageIndex){
 
 bool show_demo_window = true;
 bool show_another_window = false;
-//ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-	
+
 void sn_Vulkandraw(){        
-	uint32_t imageIndex;
+
+	static uint32_t imageIndex = 0;
 	err = vkAcquireNextImageKHR(device, 
 								ECRAN.swapChain, 
 								UINT64_MAX, 
-								ECRAN.imageAvailableSemaphores[ECRAN.currentFrame], 
+								ECRAN.imageAvailableSemaphores[imageIndex], 
 								VK_NULL_HANDLE, 
 								&imageIndex);
 		if(err == VK_ERROR_OUT_OF_DATE_KHR)
@@ -1940,7 +2090,7 @@ void sn_Vulkandraw(){
 				std::cout << "VK_ERROR_OUT_OF_DATE_KHR" << std::endl;
 				sn_interface.resizing = false;
 				rebuild(true);
-				return;
+				//return;
 			}else if (err != VK_SUCCESS && err != VK_SUBOPTIMAL_KHR) {
             throw std::runtime_error("failed to acquire swap chain image!");
         }
@@ -1951,9 +2101,10 @@ void sn_Vulkandraw(){
 	if(err == VK_ERROR_OUT_OF_HOST_MEMORY)std::cout << "VK_ERROR_OUT_OF_HOST_MEMORY" << std::endl;
 	if(err == VK_ERROR_SURFACE_LOST_KHR)std::cout << "VK_ERROR_SURFACE_LOST_KHR" << std::endl;
 	if(err == VK_ERROR_UNKNOWN)std::cout << "VK_ERROR_UNKNOWN" << std::endl;
-
-	vkWaitForFences(device, 1, &ECRAN.inFlightFences[ECRAN.currentFrame], VK_TRUE, UINT64_MAX);
-	vkResetFences(device, 1, &ECRAN.inFlightFences[ECRAN.currentFrame]);
+	
+	vkWaitForFences(device, 1, &ECRAN.inFlightFences[imageIndex], VK_TRUE, UINT64_MAX);
+	vkResetFences(device, 1, &ECRAN.inFlightFences[imageIndex]);
+	
 	//if(err == VK_ERROR_VALIDATION_FAILED)std::cout << "VK_ERROR_VALIDATION_FAILED" << std::endl;
 	// OFFLINE (1340)
 		//vkBeginCommandBuffer
@@ -1988,8 +2139,9 @@ void sn_Vulkandraw(){
 
         // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
         {
-            static float f = 0.0f;
-            static int counter = 0;
+           static int counter = 0;
+
+			io.MouseDrawCursor = true;
 
             ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
 
@@ -1998,7 +2150,7 @@ void sn_Vulkandraw(){
             ImGui::Checkbox("Another Window", &show_another_window);
 
 			static float clr_color[3] = {0.1f,0.6f,0.8f};
-            ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+            ImGui::SliderFloat("float", &f, 0.0f, 10.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
             ImGui::ColorEdit3("clear color", (float*)&clr_color); // Edit 3 floats representing a color
 
             if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
@@ -2006,9 +2158,9 @@ void sn_Vulkandraw(){
             ImGui::SameLine();
             ImGui::Text("counter = %d", counter);
 			ImGui::SameLine();
-            ImGui::Text("imageIndex = %d", imageIndex);
-			ImGui::SameLine();
             ImGui::Text("ECRAN.currentFrame = %d", ECRAN.currentFrame);
+			ImGui::SameLine();
+            ImGui::Text("imageIndex = %d", imageIndex);
 
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
             ImGui::End();
@@ -2031,11 +2183,12 @@ void sn_Vulkandraw(){
 		
         const bool is_minimized = (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f);
       
-     	err = vkResetCommandPool(device, ECRAN.imgui_commandPool, 0);
+     	vkResetCommandBuffer(ECRAN.imgui_commandBuffers[imageIndex],VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+		//err = vkResetCommandPool(device, ECRAN.commandPool, 0);
         VkCommandBufferBeginInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        err = vkBeginCommandBuffer(ECRAN.imgui_commandBuffers[ECRAN.currentFrame], &info);
+        err = vkBeginCommandBuffer(ECRAN.imgui_commandBuffers[imageIndex], &info);
       
     	VkClearValue clear_color = {};
 
@@ -2043,29 +2196,80 @@ void sn_Vulkandraw(){
         
 		RPinfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         RPinfo.renderPass = imgui_renderPass;
-        RPinfo.framebuffer = ECRAN.swapChainFramebuffers[ECRAN.currentFrame];
+        RPinfo.framebuffer = ECRAN.swapChainFramebuffers[imageIndex];
         RPinfo.renderArea.extent.width = sn_interface.destWidth;
         RPinfo.renderArea.extent.height = sn_interface.destHeight;
         RPinfo.clearValueCount = 1;
         RPinfo.pClearValues = &clear_color;
 		
-        vkCmdBeginRenderPass(ECRAN.imgui_commandBuffers[ECRAN.currentFrame], &RPinfo, VK_SUBPASS_CONTENTS_INLINE);
-    
+        //vkCmdBeginRenderPass(ECRAN.imgui_commandBuffers[imageIndex], &RPinfo, VK_SUBPASS_CONTENTS_INLINE);
 		
-		// Record dear imgui primitives into command buffer
-		ImGui_ImplVulkan_RenderDrawData(draw_data, ECRAN.imgui_commandBuffers[ECRAN.currentFrame],VK_NULL_HANDLE);
-	
-		// Submit command buffer
-		vkCmdEndRenderPass(ECRAN.imgui_commandBuffers[ECRAN.currentFrame]);
-		err = vkEndCommandBuffer(ECRAN.imgui_commandBuffers[ECRAN.currentFrame]);
+		VkClearValue* pClearColor = nullptr;
+		VkClearValue* pDepthValue = nullptr;
+
+		VkRenderingAttachmentInfoKHR Color = {};
+		VkRenderingAttachmentInfo Depth = {};
+		Color.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+		Depth.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+		Color.imageView = ECRAN.swapChainImageViews[imageIndex];
+		Color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		Color.resolveMode = VK_RESOLVE_MODE_NONE;
+		Color.imageView = VK_NULL_HANDLE;
+		Color.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		Color.loadOp = pClearColor ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+		Color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+		if(pClearColor)
+		{
+			Color.clearValue = *pClearColor;
+		}
+		
+		Depth.imageView = VK_NULL_HANDLE;
+		Depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		Depth.resolveMode = VK_RESOLVE_MODE_NONE;
+		Depth.resolveImageView = VK_NULL_HANDLE;
+		Depth.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		Depth.loadOp = pDepthValue ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+		Depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+		if(pDepthValue)
+		{
+			Depth.clearValue = *pDepthValue;
+		}
+		
+		
+		
+		VkRenderingInfoKHR RenderingInfo = {};
+		RenderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+		RenderingInfo.renderArea = {{0,0},{sn_interface.destWidth,sn_interface.destHeight}};
+		RenderingInfo.layerCount = 0;
+		RenderingInfo.viewMask = 0;
+		RenderingInfo.colorAttachmentCount = 1;
+		RenderingInfo.pColorAttachments = &Color;
+		RenderingInfo.pDepthAttachment = &Depth;
+		
+		//vkCmdBeginRendering(ECRAN.imgui_commandBuffers[imageIndex],&RenderingInfo);
+		ImGui_ImplVulkan_RenderDrawData(draw_data, ECRAN.imgui_commandBuffers[imageIndex],VK_NULL_HANDLE);
+		//vkCmdEndRendering(ECRAN.imgui_commandBuffers[imageIndex]);
+		
+  		ECRAN.SWAPCHAIN_MemoryBarrier(ECRAN.imgui_commandBuffers[imageIndex],
+									ECRAN.swapChainImages[imageIndex],
+									VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+									VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+		
+		//Submit command buffer
+		//vkCmdEndRenderPass(ECRAN.imgui_commandBuffers[imageIndex]);
+		
+		err = vkEndCommandBuffer(ECRAN.imgui_commandBuffers[imageIndex]);
 
 		if(err != VK_SUCCESS)
 		{
-			throw std::runtime_error("Marche pas le vkEndCommandBuffer de Imgui!");
+			
+			if(err == VK_ERROR_OUT_OF_HOST_MEMORY)throw std::runtime_error("Marche pas le vkEndCommandBuffer de Imgui!");
 		}
-	VkCommandBuffer batch[2] = {ECRAN.commandBuffers[ECRAN.currentFrame],ECRAN.imgui_commandBuffers[ECRAN.currentFrame]};
+	VkCommandBuffer batch[2] = {ECRAN.commandBuffers[imageIndex],ECRAN.imgui_commandBuffers[imageIndex]};
 	#else
-	VkCommandBuffer batch[1] = {ECRAN.commandBuffers[ECRAN.currentFrame]};
+	VkCommandBuffer batch[1] = {ECRAN.commandBuffers[imageIndex]};
     #endif
 
 
@@ -2074,7 +2278,7 @@ void sn_Vulkandraw(){
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = &ECRAN.imageAvailableSemaphores[ECRAN.currentFrame];
+	submitInfo.pWaitSemaphores = &ECRAN.imageAvailableSemaphores[imageIndex];
 	submitInfo.pWaitDstStageMask = waitStages;
 	
 	#ifdef USE_IMGUI_PLEASE_IFYOUCAN
@@ -2085,24 +2289,27 @@ void sn_Vulkandraw(){
 
 	submitInfo.pCommandBuffers = batch;//&ECRAN.commandBuffers[imageIndex];
 	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = &ECRAN.renderFinishedSemaphores[ECRAN.currentFrame];
+	submitInfo.pSignalSemaphores = &ECRAN.renderFinishedSemaphores[imageIndex];
 
 	Update_uniforms(imageIndex);
 
-	err = vkQueueSubmit(graphicsQueue, 1, &submitInfo, ECRAN.inFlightFences[ECRAN.currentFrame]);
+	err = vkQueueSubmit(graphicsQueue, 1, &submitInfo, ECRAN.inFlightFences[imageIndex]);
 
 	if (err != VK_SUCCESS) {
-            throw std::runtime_error("failed to submit draw command buffer!");
+			if(err == VK_ERROR_OUT_OF_HOST_MEMORY)throw std::runtime_error("VK_ERROR_OUT_OF_HOST_MEMORY");
+			if(err == VK_ERROR_OUT_OF_DEVICE_MEMORY)throw std::runtime_error("VK_ERROR_OUT_OF_DEVICE_MEMORY");
+			if(err == VK_ERROR_DEVICE_LOST)throw std::runtime_error("VK_ERROR_DEVICE_LOST");
+			throw std::runtime_error("failed to submit draw command buffer!");
         }
 
 		//Tu vas attendre sur ce semaphore pour présenter l'image
 		VkPresentInfoKHR presentInfo{};
 		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 		presentInfo.waitSemaphoreCount = 1;
-		presentInfo.pWaitSemaphores = &ECRAN.imageAvailableSemaphores[ECRAN.currentFrame];
+		presentInfo.pWaitSemaphores = &ECRAN.imageAvailableSemaphores[imageIndex];
 		presentInfo.swapchainCount = 1;
 		presentInfo.pSwapchains = &ECRAN.swapChain;
-		presentInfo.pImageIndices = &ECRAN.currentFrame;
+		presentInfo.pImageIndices = &imageIndex;
 
 		err = vkQueuePresentKHR(presentQueue, &presentInfo);
 
