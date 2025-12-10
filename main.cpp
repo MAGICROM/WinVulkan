@@ -95,13 +95,16 @@ bool 		Keyboard(RAWINPUT* raw, long timestamp);
 
 }sn_interface;
 
+#define USE_IMGUI_PLEASE_IFYOUCAN
+extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);   
+
 bool run_vulkan = true;
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)						
 {																									\
 
-	#ifdef USE_IMGUI_PLEASE_IFYOUCAN
+#ifdef USE_IMGUI_PLEASE_IFYOUCAN
 	ImGui_ImplWin32_WndProcHandler(hWnd,uMsg,wParam,lParam);   
-	#endif
+#endif
 
 	unsigned char key = (unsigned char)wParam;
 	
@@ -199,10 +202,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		sn_interface.wY = HIWORD(lParam) - (sn_interface.destHeight / 2);
 		sn_interface.Wmousemove();
 		
-		#ifdef USE_IMGUI_PLEASE_IFYOUCAN
-		ImGuiIO& io = ImGui::GetIO();
-		io.AddMousePosEvent((float)LOWORD(lParam), HIWORD(lParam));
-		#endif
+		//#ifdef USE_IMGUI_PLEASE_IFYOUCAN
+		//ImGuiIO& io = ImGui::GetIO();
+		//io.AddMousePosEvent((float)LOWORD(lParam), HIWORD(lParam));
+		//#endif
 
 		/*std::cout << "Mouse :" 
 				<< sn_interface.base
@@ -252,7 +255,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		sn_interface.resizing = false;
 		break;
 	}
-	return (DefWindowProc(hWnd, uMsg, wParam, lParam));												\
+	return (DefWindowProc(hWnd, uMsg, wParam, lParam));												
 }																			
 
 typedef struct MyData {
@@ -438,13 +441,15 @@ DWORD WINAPI MyThreadFunction( LPVOID lpParam )
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define USE_IMGUI_PLEASE_IFYOUCAN
+
 #ifdef USE_IMGUI_PLEASE_IFYOUCAN
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 #define VK_USE_PLATFORM_WIN32_KHR
 #include "imgui_impl_vulkan.h"
 #endif
+
+
 
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
@@ -464,11 +469,6 @@ void sn_Interface::ChangeSize(unsigned short Width,unsigned short Height)
 	aspectH = base / destWidth; 		
 	aspectV = base / Height; 
 
-	#ifdef USE_IMGUI_PLEASE_IFYOUCAN
-	ImGuiIO& io = ImGui::GetIO();
-    io.DisplaySize = ImVec2((float)destWidth, (float)destHeight);
-    io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
-	#endif
 	resizing = false;
 }
 
@@ -497,20 +497,19 @@ long long sn_Interface::Tick()
 	long long Tick = time_now.QuadPart - c_start;
 	c_start = time_now.QuadPart;
 
+	//Converti les clock processeur en millisecond et stocke les 128 derniers
 	fpss[pos] = (float)Tick;
 	fpss[pos] *= 0.000001f;
 	pos++;
 	if(pos>127)pos=0;
 	
+	//Fais une integrale et calcule un delta moyen et les fps
 	fps = 0.0f;
 	for(volatile int i = 0; i < 128; i++)fps += fpss[i];
 	fps /= 128.0f;
 	delta_time = fps;
 	fps = 1.0f / delta_time; 
-#ifdef USE_IMGUI_PLEASE_IFYOUCAN
-	//ImGuiIO& io = ImGui::GetIO();
-	//io.DeltaTime = delta_time;
-#endif
+
 	if(MouseBt[0].pressed)MouseBt[0].duration = c_start - MouseBt[0].timestamp;
 	if(MouseBt[1].pressed)MouseBt[1].duration = c_start - MouseBt[1].timestamp;
 	if(MouseBt[2].pressed)MouseBt[2].duration = c_start - MouseBt[2].timestamp;
@@ -572,20 +571,6 @@ long long sn_Interface::Tick()
 		MOUSE_INPUT(2, RI_MOUSE_MIDDLE_BUTTON_DOWN, RI_MOUSE_MIDDLE_BUTTON_UP)
 		MOUSE_INPUT(3, RI_MOUSE_BUTTON_4_DOWN, RI_MOUSE_BUTTON_4_UP)
 		MOUSE_INPUT(4, RI_MOUSE_BUTTON_5_DOWN, RI_MOUSE_BUTTON_5_UP)
-		
-		#ifdef USE_IMGUI_PLEASE_IFYOUCAN
-		int button = -1;
-		if(Button_pressed(raw,&button))
-		{
-		//ImGuiIO& io = ImGui::GetIO();
-		//io.AddMouseButtonEvent(button,true);
-		}
-		else if(button != -1)
-		{
-		//ImGuiIO& io = ImGui::GetIO();
-		//io.AddMouseButtonEvent(button,false);
-		}
-		#endif
 
 		if(raw->data.mouse.usButtonFlags & RI_MOUSE_WHEEL)
 		{
@@ -596,7 +581,8 @@ long long sn_Interface::Tick()
 			base = 400.f * exp(baseexp);
 		}
 	}
-bool sn_Interface::Keyboard(RAWINPUT* raw, long timestamp)
+
+	bool sn_Interface::Keyboard(RAWINPUT* raw, long timestamp)
 	{
 		if(raw->data.keyboard.Flags == 0)
 			Keys[raw->data.keyboard.MakeCode].input_pressed(timestamp);
@@ -906,7 +892,7 @@ static void check_vk_result(VkResult err)
 
 void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
 {
-    std::vector<const char*> extensions;
+    std::vector<const char*> extensions_present_names;
     std::vector<const char*> layers;
     std::vector<const char*> extension_names;
 
@@ -915,12 +901,22 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
 	const char **required_extensions{NULL};
 	
 	uint32_t queueFamilyCount{0};
-    uint32_t deviceCount{};
+    uint32_t deviceCount{0};
     uint32_t instance_layer_count{0};
     uint32_t required_extension_count{0};
-    uint32_t instance_extension_count{0};
+    
         
-    auto t_start = std::chrono::high_resolution_clock::now();
+    
+	
+	uint32_t vkversion;
+	err = vkEnumerateInstanceVersion(&vkversion);
+
+	uint32_t vkversion_variant = VK_API_VERSION_VARIANT(vkversion);
+	uint32_t vkversion_major = VK_VERSION_MAJOR(vkversion);
+	uint32_t vkversion_minor = VK_API_VERSION_MINOR(vkversion);
+	uint32_t vkversion_patch = VK_VERSION_PATCH(vkversion);
+
+	auto t_start = std::chrono::high_resolution_clock::now();
     auto t_now = std::chrono::high_resolution_clock::now();
         
     const char *instance_validation_layers_alt1[] = {"VK_LAYER_LUNARG_standard_validation"};
@@ -938,25 +934,36 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
             }
         }
 		
-	required_extension_count = 2; //VK_KHR_surface, VK_KHR_win32_surface, VK_EXT_debug_utils
+	uint32_t instance_extension_count{0};
+	vkEnumerateInstanceExtensionProperties(NULL, &instance_extension_count, NULL);
+	std::vector<VkExtensionProperties> ExtensionProperties(instance_extension_count);
+	vkEnumerateInstanceExtensionProperties(NULL, &instance_extension_count, ExtensionProperties.data());
+            
+	for(uint32_t i=0;i<instance_extension_count;i++)
+            {
+				std::cout << "Extension: " << ExtensionProperties[i].extensionName << std::endl;
+			}
 	
     for(uint32_t i=0;i<instance_layer_count;i++)
         {
+			
 			if (required_extension_count > 0) {
             instance_extensions = (VkExtensionProperties*)malloc(sizeof (VkExtensionProperties) * instance_extension_count);
-            err = vkEnumerateInstanceExtensionProperties(layers[i], &instance_extension_count, instance_extensions);
+            err = vkEnumerateInstanceExtensionProperties(layers[i], &instance_extension_count, NULL);
             for(uint32_t i=0;i<instance_extension_count;i++)
             {
-                extensions.push_back(instance_extensions[i].extensionName);
+                extensions_present_names.push_back(instance_extensions[i].extensionName);
 				std::cout << "Extension: " << instance_extensions[i].extensionName << std::endl;
 			}
 			free(instance_extensions);
         	}
 		}
 	
+	//extensions utilisés
 	extension_names.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
 	extension_names.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
 	extension_names.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+	//extension_names.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
 
 	VkApplicationInfo appInfo = {};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -964,7 +971,10 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
 	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 	appInfo.pEngineName = "Spacenet";
 	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-	appInfo.apiVersion = VK_API_VERSION_1_0;
+	appInfo.apiVersion = VK_MAKE_API_VERSION(vkversion_variant,
+											vkversion_major,
+											vkversion_minor,
+											vkversion_patch);
 
 	VkInstanceCreateInfo instancecreateInfo = {};
 	instancecreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -982,6 +992,7 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
 		std::cerr << "Failed to create Vulkan instance!" << std::endl;
 		return;
 	}
+	std::cout << "VULKAN INSTANCE OK" << std::endl;
 
 	VkWin32SurfaceCreateInfoKHR surfaceCreateInfo = {};
 	surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
@@ -995,7 +1006,7 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
     vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
 	
 	//Teste tous les gpus
-	for (const auto& tested_device : devices) 
+	for (const VkPhysicalDevice& tested_device : devices) 
 	{
 		vkGetPhysicalDeviceQueueFamilyProperties(tested_device, &queueFamilyCount, nullptr);
 		std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
@@ -1003,8 +1014,10 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
 	
 		uint32_t n_queue = 0;
 		
+		//Teste toutes les queues
 		for (const auto& queueFamily : queueFamilies) {
-				if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+				if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) 
+				{
 				VkBool32 presentSupport = false;
 				graphicsFamily = n_queue;
 				vkGetPhysicalDeviceSurfaceSupportKHR(tested_device, n_queue, surface, &presentSupport);
@@ -1035,6 +1048,18 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
         const char* const* _ppExtensionNames = NULL;    
         // get extension names
         uint32_t _extensionCount = 0;
+		
+		
+		uint32_t _layer_count{0};
+		vkEnumerateDeviceLayerProperties(carte_graphique , &_layer_count, NULL);
+ 		std::vector<VkLayerProperties> layerProps(_layer_count);
+		vkEnumerateDeviceLayerProperties(carte_graphique , &_layer_count, layerProps.data());
+		
+		for (const VkLayerProperties& tested_layer : layerProps) {
+			std::cout << tested_layer.layerName << std::endl;
+			std::cout << tested_layer.description << std::endl;
+		}
+
 
         vkEnumerateDeviceExtensionProperties( carte_graphique, NULL, &_extensionCount, NULL);
         std::vector<const char *> extNames;
@@ -1061,7 +1086,7 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
         if(err != VK_SUCCESS){
             std::runtime_error("failed to create logical device!");
         }
-        
+        std::cout << "VULKAN GPU OK" << std::endl;
 		VkDebugUtilsMessengerCreateInfoEXT dbg_messenger_create_info;
 		
 		vkGetDeviceQueue(device, graphicsFamily, 0, &graphicsQueue);
