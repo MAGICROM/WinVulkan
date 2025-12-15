@@ -1354,10 +1354,12 @@ struct snTexture
 struct snBuffer
 { 
     alignas(16)
-
-	void* 		mem_ptr = nullptr;
-	uint32_t 	mem_size = 0l;
-
+//If is set the buffer is a texture
+	snTexture* 		pTexture = nullptr;
+//Pointer set on a shared memory address
+	void* 			mem_ptr = nullptr;
+	uint32_t 		mem_size = 0l;
+//Handles on memory
     VkBuffer 		vkbuffer	{VK_NULL_HANDLE};
     VkDeviceMemory 	vkdevicemem	{VK_NULL_HANDLE};
 
@@ -1485,14 +1487,17 @@ void CopyFrom(snBuffer& buffer){
 	
 
 	}
-void CreateTextureFrom(	uint32_t tex_width,
-						uint32_t tex_height,
-					   	void* data,
-						uint32_t size,
-						snTexture* pTexture)
+//Cree une texture 
+void CreateTextureFrom(	uint32_t tex_width,uint32_t tex_height,void* data,uint32_t size)
 {
+	
+	if(pTexture)return;
+	pTexture = new snTexture;
+	
 	snBuffer stage;
 	stage.CreateTransferBuffer(data,size);
+
+	mem_size = size;
 	
 	VkImageCreateInfo text_img{};
     text_img.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -1601,17 +1606,18 @@ void CreateTextureFrom(	uint32_t tex_width,
     smp_info.unnormalizedCoordinates = VK_FALSE;
  
     err = vkCreateSampler(device,&smp_info,nullptr,&pTexture->samptexture);
-
-
+	stage.Release();
 }
-
-void Release(snTexture* ptext = nullptr)
+//Detruit le buffer
+void Release()
 	{
-		if(ptext)
+		if(pTexture)
 		{
-			vkDestroySampler(device,ptext->samptexture, nullptr);
-			vkDestroyImageView(device, ptext->ivtexture, nullptr);
-            vkDestroyImage(device, ptext->texture, nullptr);
+			vkDestroySampler(device,pTexture->samptexture, nullptr);
+			vkDestroyImageView(device, pTexture->ivtexture, nullptr);
+            vkDestroyImage(device, pTexture->texture, nullptr);
+			delete pTexture;
+			pTexture = nullptr;
 		}			
 			vkFreeMemory(device,vkdevicemem,nullptr);
 		if(vkbuffer)vkDestroyBuffer(device,vkbuffer,nullptr);
@@ -1863,6 +1869,8 @@ struct SnSwapChain
 	std::vector<VkImage>		swapChainImages;
     std::vector<VkImageView> 	swapChainImageViews;
     std::vector<VkFramebuffer> 	swapChainFramebuffers;
+
+	std::vector<snBuffer> textures;
 	
 	VkCommandPool commandPool;
 	VkCommandBuffer SN_ARRAY_BY_FRAME 		*commandBuffers = nullptr; 		
@@ -1871,7 +1879,7 @@ struct SnSwapChain
 	VkDescriptorSetLayout 					descriptorSetLayout; 
 	VkDescriptorSet SN_ARRAY_BY_FRAME 		*descriptorsets = nullptr; 			
 	
-	snBuffer SN_ARRAY_BY_FRAME 				*uniforms = nullptr; 							//[] BY FRAMES
+	snBuffer SN_ARRAY_BY_FRAME 				*uniforms = nullptr; 							
 
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
@@ -1929,18 +1937,7 @@ struct SnSwapChain
 		vkDestroyPipeline(device, graphicsPipeline, nullptr);
         vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
     }
-	void BuffersCreate()
-	{
-		if(!uniforms)
-		{
-			uniforms = new snBuffer[swap_imageCount];
-			for (size_t i = 0; i < swap_imageCount; i++) 
-			{
-				glm::mat4 matrice = glm::mat4(1.f);
-				uniforms[i].CreateUniformBuffer(glm::value_ptr(matrice),sizeof(glm::mat4));
-			}	
-		}
-		
+	void AssetsCreate(){
 		uint32_t tex_width;
 		uint32_t tex_height;
 		loadTexture("pipo", NULL, NULL, &tex_width, &tex_height);
@@ -1959,23 +1956,42 @@ struct SnSwapChain
 			ptr_src+=3;
 			ptr_dst+=4;
 		}
-		snTexture texture;
-		snBuffer testbuffer;
-		testbuffer.CreateTextureFrom(
-			tex_width,tex_height,
+		snBuffer texturebuffer;
+		texturebuffer.CreateTextureFrom(
+			tex_width,
+			tex_height,
 			data,
-			tex_width*tex_height*sizeof(uint32_t),
-			&texture);
+			tex_width*tex_height*sizeof(uint32_t));
+
+		textures.push_back(texturebuffer);
+	}
+	void AssetsDestroy(){
+		for(volatile size_t i = 0; i < textures.size(); i++)textures[i].Release();
+	}
+	void BuffersCreate()
+	{
+		if(!uniforms)
+		{
+			uniforms = new snBuffer[swap_imageCount];
+			for (size_t i = 0; i < swap_imageCount; i++) 
+			{
+				glm::mat4 matrice = glm::mat4(1.f);
+				uniforms[i].CreateUniformBuffer(glm::value_ptr(matrice),sizeof(glm::mat4));
+			}	
+		}
+		
+		
 
 	}
 	void BuffersDestroy()
 	{
-		for (size_t i = 0; i < swap_imageCount; i++)uniforms[i].Release();	
+		for(size_t i = 0; i < swap_imageCount; i++)uniforms[i].Release();
+		
 	}
 	
 	void DescriptorsCreate()
     {
-		Read_Obj();
+		//Read_Obj();
 		//Une liste de bindings pour le shader, un modele d'entrées
 		
 		VkDescriptorSetLayoutBinding setLayoutBindings{};
@@ -2475,10 +2491,11 @@ bool show_another_window = false;
 void sn_Vulkandraw(){        
 
 	static uint32_t imageIndex = 0;
+	vkWaitForFences(device, 1, &ECRAN.inFlightFences[ECRAN.currentFrame], VK_TRUE, UINT64_MAX);
 	err = vkAcquireNextImageKHR(device, 
 								ECRAN.swapChain, 
 								UINT64_MAX, 
-								ECRAN.imageAvailableSemaphores[imageIndex], 
+								ECRAN.imageAvailableSemaphores[ECRAN.currentFrame], 
 								VK_NULL_HANDLE, 
 								&imageIndex);
 		if(err == VK_ERROR_OUT_OF_DATE_KHR)
@@ -2488,8 +2505,10 @@ void sn_Vulkandraw(){
 				rebuild(true);
 				//return;
 			}else if (err != VK_SUCCESS && err != VK_SUBOPTIMAL_KHR) {
+			
             throw std::runtime_error("failed to acquire swap chain image!");
         }
+	vkResetFences(device, 1, &ECRAN.inFlightFences[ECRAN.currentFrame]);
 	if(err == VK_ERROR_DEVICE_LOST)std::cout << "VK_ERROR_DEVICE_LOST" << std::endl;
 	if(err == VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT)std::cout << "VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT" << std::endl;
 	if(err == VK_ERROR_OUT_OF_DATE_KHR)std::cout << "VK_ERROR_OUT_OF_DATE_KHR" << std::endl;
@@ -2498,8 +2517,8 @@ void sn_Vulkandraw(){
 	if(err == VK_ERROR_SURFACE_LOST_KHR)std::cout << "VK_ERROR_SURFACE_LOST_KHR" << std::endl;
 	if(err == VK_ERROR_UNKNOWN)std::cout << "VK_ERROR_UNKNOWN" << std::endl;
 	
-	vkWaitForFences(device, 1, &ECRAN.inFlightFences[imageIndex], VK_TRUE, UINT64_MAX);
-	vkResetFences(device, 1, &ECRAN.inFlightFences[imageIndex]);
+	
+	
 	
 	//if(err == VK_ERROR_VALIDATION_FAILED)std::cout << "VK_ERROR_VALIDATION_FAILED" << std::endl;
 	// OFFLINE (1340)
@@ -2673,7 +2692,7 @@ void sn_Vulkandraw(){
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = &ECRAN.imageAvailableSemaphores[imageIndex];
+	submitInfo.pWaitSemaphores = &ECRAN.imageAvailableSemaphores[ECRAN.currentFrame];
 	submitInfo.pWaitDstStageMask = waitStages;
 	
 	#ifdef USE_IMGUI_PLEASE_IFYOUCAN
@@ -2684,11 +2703,11 @@ void sn_Vulkandraw(){
 
 	submitInfo.pCommandBuffers = batch;//&ECRAN.commandBuffers[imageIndex];
 	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = &ECRAN.renderFinishedSemaphores[imageIndex];
+	submitInfo.pSignalSemaphores = &ECRAN.renderFinishedSemaphores[ECRAN.currentFrame];
 
 	Update_uniforms(imageIndex);
 
-	err = vkQueueSubmit(graphicsQueue, 1, &submitInfo, ECRAN.inFlightFences[imageIndex]);
+	err = vkQueueSubmit(graphicsQueue, 1, &submitInfo, ECRAN.inFlightFences[ECRAN.currentFrame]);
 
 	if (err != VK_SUCCESS) {
 			if(err == VK_ERROR_OUT_OF_HOST_MEMORY)throw std::runtime_error("VK_ERROR_OUT_OF_HOST_MEMORY");
@@ -2701,7 +2720,7 @@ void sn_Vulkandraw(){
 		VkPresentInfoKHR presentInfo{};
 		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 		presentInfo.waitSemaphoreCount = 1;
-		presentInfo.pWaitSemaphores = &ECRAN.imageAvailableSemaphores[imageIndex];
+		presentInfo.pWaitSemaphores = &ECRAN.imageAvailableSemaphores[ECRAN.currentFrame];
 		presentInfo.swapchainCount = 1;
 		presentInfo.pSwapchains = &ECRAN.swapChain;
 		presentInfo.pImageIndices = &imageIndex;
