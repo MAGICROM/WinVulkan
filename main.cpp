@@ -49,13 +49,12 @@ bool input_released(long time)
 	return false;
 	}
 };
-
 struct sn_Interface
 {	
 	bool _no_initialized = true; //For initialisation
 	long long c_start;	//Actual high precision time
-	float delta_time;	//temps lissé par intégration
-	float fps;			
+	double delta_time;	//temps lissé par intégration
+	double fps;			
 	
 	sn_Key Keys[256];
 	sn_Key MouseBt[5];
@@ -95,7 +94,7 @@ bool 		Keyboard(RAWINPUT* raw, long timestamp);
 
 }sn_interface;
 
-//#define USE_IMGUI_PLEASE_IFYOUCAN
+#define USE_IMGUI_PLEASE_IFYOUCAN
 #ifdef USE_IMGUI_PLEASE_IFYOUCAN
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);   
 #endif
@@ -259,15 +258,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	}
 	return (DefWindowProc(hWnd, uMsg, wParam, lParam));												
 }																			
-
 typedef struct MyData {
     HWND hwnd;
     HINSTANCE hinstance;
 } MYDATA, *PMYDATA;
-
 DWORD WINAPI MyThreadFunction( LPVOID lpParam );
-
-
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
     WNDCLASSEX wndClass;
@@ -419,7 +414,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     return 0;
 }
-
 DWORD WINAPI MyThreadFunction( LPVOID lpParam ) 
 { 
    	HANDLE hStdout=GetStdHandle(STD_OUTPUT_HANDLE);
@@ -434,28 +428,26 @@ DWORD WINAPI MyThreadFunction( LPVOID lpParam )
 	sn_Vulkandestroy();
     return 0; 
 } 
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #ifdef USE_IMGUI_PLEASE_IFYOUCAN
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 #define VK_USE_PLATFORM_WIN32_KHR
 #include "imgui_impl_vulkan.h"
 #endif
-
-
-
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
+#include <vulkan/vulkan.h>
+#include <vulkan/vulkan_win32.h>
+#include <vector>
+#include <set>
 
+#define MOUSE_INPUT(x, maskpressed, maskreleased) \
+	if(raw->data.mouse.usButtonFlags & maskpressed)MouseBt[x].input_pressed(timestamp); \
+	if(raw->data.mouse.usButtonFlags & maskreleased)MouseBt[x].input_released(timestamp); 	
 void sn_Interface::Wmousemove(void)
 {
 	wfX = float(wX) / float(destWidth) * 2.f;
@@ -473,14 +465,13 @@ void sn_Interface::ChangeSize(unsigned short Width,unsigned short Height)
 
 	resizing = false;
 }
-
 long long sn_Interface::Tick()
 	{
 	static LARGE_INTEGER Frequency;
 	static LARGE_INTEGER time_start;
 	static LARGE_INTEGER time_now;
 	static int pos = 0;
-	static float fpss[128];
+	static double fpss[128];
 
 	if(_no_initialized)
 		{
@@ -490,7 +481,6 @@ long long sn_Interface::Tick()
 		}
 	
 	//Update time
-	
 	QueryPerformanceCounter(&time_now); 
 	time_now.QuadPart -= time_start.QuadPart;
 	time_now.QuadPart *= 1000000;
@@ -500,17 +490,17 @@ long long sn_Interface::Tick()
 	c_start = time_now.QuadPart;
 
 	//Converti les clock processeur en millisecond et stocke les 128 derniers
-	fpss[pos] = (float)Tick;
-	fpss[pos] *= 0.000001f;
+	fpss[pos] = (double)Tick;
+	fpss[pos] *= 0.000001;
 	pos++;
 	if(pos>127)pos=0;
 	
 	//Fais une integrale et calcule un delta moyen et les fps
 	fps = 0.0f;
 	for(volatile int i = 0; i < 128; i++)fps += fpss[i];
-	fps /= 128.0f;
+	fps /= 128.0;
 	delta_time = fps;
-	fps = 1.0f / delta_time; 
+	fps = 1.0 / delta_time; 
 
 	if(MouseBt[0].pressed)MouseBt[0].duration = c_start - MouseBt[0].timestamp;
 	if(MouseBt[1].pressed)MouseBt[1].duration = c_start - MouseBt[1].timestamp;
@@ -528,8 +518,7 @@ long long sn_Interface::Tick()
 
 	return Tick;
 	}
-	bool sn_Interface::Button_pressed(RAWINPUT* raw,int* pnum)
-	{
+bool sn_Interface::Button_pressed(RAWINPUT* raw,int* pnum){
 		if(raw->data.mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_DOWN){*pnum=0;return true;}
 		if(raw->data.mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_UP){*pnum=0;return false;}
 		if(raw->data.mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_DOWN){*pnum=1;return true;}
@@ -542,12 +531,7 @@ long long sn_Interface::Tick()
 		if(raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_5_UP){*pnum=4;return false;}
 		return false;
 	}
-	
-	#define MOUSE_INPUT(x, maskpressed, maskreleased) \
-	if(raw->data.mouse.usButtonFlags & maskpressed)MouseBt[x].input_pressed(timestamp); \
-	if(raw->data.mouse.usButtonFlags & maskreleased)MouseBt[x].input_released(timestamp); 	
-
-	void sn_Interface::Mouse(RAWINPUT* raw, long timestamp)
+void sn_Interface::Mouse(RAWINPUT* raw, long timestamp)
 	{
 		if(raw->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE)
 		{
@@ -583,8 +567,7 @@ long long sn_Interface::Tick()
 			base = 400.f * exp(baseexp);
 		}
 	}
-
-	bool sn_Interface::Keyboard(RAWINPUT* raw, long timestamp)
+bool sn_Interface::Keyboard(RAWINPUT* raw, long timestamp)
 	{
 		if(raw->data.keyboard.Flags == 0)
 			Keys[raw->data.keyboard.MakeCode].input_pressed(timestamp);
@@ -592,14 +575,12 @@ long long sn_Interface::Tick()
 			return Keys[raw->data.keyboard.MakeCode].input_released(timestamp);
 		return false;
 	}
-	
 struct Vertex
 {
 	glm::vec3 position;
 	glm::vec3 normale;
 	glm::vec2 uv;
 };
-
 struct Camera
 {
 	glm::vec3 position = glm::vec3(0.0f);
@@ -635,28 +616,11 @@ struct Camera
 		return World;
 	}
 };
-
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#include <vulkan/vulkan.h>
-#include <vulkan/vulkan_win32.h>
-
-#include <vector>
-#include <set>
-
-struct snVulkan
-{
-	VkPipeline Pipe;
-	VkDevice mdevice;
-	operator VkDevice&(){return mdevice;};
-	operator VkPipeline&(){return Pipe;};
-}device_test;
 
 	//RUNNING
 	uint32_t swap_imageCount;
@@ -670,35 +634,33 @@ struct snVulkan
     VkQueue presentQueue;
 	VkQueue transferQueue;
 	
-    //VULKAN API
+    //VULKAN API----------------------------------------------------------------
     VkInstance instance;
 
-	//SCREEN
+	//SCREEN--------------------------------------------------------------------
     VkSurfaceKHR surface;
 
-	//GPU
+	//GPU-----------------------------------------------------------------------
     VkPhysicalDevice carte_graphique = VK_NULL_HANDLE;
     VkSurfaceCapabilitiesKHR capabilities;
     std::vector<VkSurfaceFormatKHR> formats;
     std::vector<VkPresentModeKHR> presentModes;
 	
-	//DRIVER VULKAN
+	//DRIVER VULKAN-------------------------------------------------------------
     VkDevice device;
     VkRenderPass renderPass;
-	//VkRenderPass renderPass_imgui;
 
-	//MEMORY
+	//MEMORY--------------------------------------------------------------------
 	VkDescriptorPool descriptorPool;
 	VkCommandPool transfercommandPool;
-	
+
+	//IMGUI---------------------------------------------------------------------
 #ifdef USE_IMGUI_PLEASE_IFYOUCAN
 	VkDescriptorPool imgui_pDescriptorPool;
 	VkCommandPool imgui_CommandPool;
 	VkCommandBuffer imgui_CommandBuffer;
 	VkRenderPass imgui_renderPass;
 #endif
-	
-
 	void rebuild(bool);
 	void Buffers(uint32_t swap_imageCount);
 	
@@ -889,7 +851,6 @@ struct PipeModel{
 };
 void EcranOn();
 void EcranOff();
-
 static void check_vk_result(VkResult err)
 {
     if (err == 0)
@@ -898,7 +859,6 @@ static void check_vk_result(VkResult err)
     if (err < 0)
         abort();
 }
-
 void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
 {
     std::vector<const char*> extensions_present_names;
@@ -1180,9 +1140,6 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
 			check_vk_result(err);
 		}
 		
-		
-		
-
 		if (capabilities.maxImageCount > 0 && swap_imageCount > capabilities.maxImageCount) {
 				swap_imageCount = capabilities.maxImageCount;
 			}
@@ -1268,9 +1225,7 @@ void CommandImgMemBarrier(VkCommandBuffer& buf,VkImage img,VkImageLayout de,VkIm
 	memory_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	memory_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	memory_barrier.image = img;//>>>>>>>>>>
-	memory_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;//>>>>>>>>>>
-	memory_barrier.subresourceRange.levelCount = 1;
-	memory_barrier.subresourceRange.layerCount = 1;
+	memory_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
 	VkPipelineStageFlagBits Source{VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT};
 	VkPipelineStageFlagBits Destination{VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT};
@@ -1302,6 +1257,13 @@ void CommandImgMemBarrier(VkCommandBuffer& buf,VkImage img,VkImageLayout de,VkIm
 		memory_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;//VK_ACCESS_TRANSFER_WRITE_BIT;
 		memory_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
 		Source = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		Destination = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	}
+	if(de == VK_IMAGE_LAYOUT_PREINITIALIZED && a == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+	{
+		memory_barrier.srcAccessMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;//VK_ACCESS_TRANSFER_WRITE_BIT;
+		memory_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+		Source = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 		Destination = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 	}
 
@@ -1343,14 +1305,12 @@ struct snCommand
 	operator VkCommandBuffer&(){return m_cmd;};
 	operator VkFence&(){return fence;};
 };
-
 struct snTexture
 {
-	VkImage texture;
-	VkImageView ivtexture;
-	VkSampler samptexture;
+	VkImage image;
+	VkImageView imageview;
+	VkSampler sampler;
 };
-
 struct snBuffer
 { 
     alignas(16)
@@ -1512,19 +1472,19 @@ void CreateTextureFrom(	uint32_t tex_width,uint32_t tex_height,void* data,uint32
     text_img.flags = 0;
     text_img.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;   
 
-	if (vkCreateImage(device, &text_img, nullptr, &pTexture->texture) != VK_SUCCESS) {
+	if (vkCreateImage(device, &text_img, nullptr, &pTexture->image) != VK_SUCCESS) {
         throw std::runtime_error("failed to create texture image!");
         }
 	
 	VkMemoryRequirements req;
-    vkGetImageMemoryRequirements(device, pTexture->texture, &req);
+    vkGetImageMemoryRequirements(device, pTexture->image, &req);
     VkMemoryAllocateInfo alloc_info = {};
     alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     alloc_info.allocationSize = req.size;
     alloc_info.memoryTypeIndex = findMemoryType(req.memoryTypeBits,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
 	err = vkAllocateMemory(device, &alloc_info, nullptr, &vkdevicemem);
-    err = vkBindImageMemory(device, pTexture->texture, vkdevicemem, 0);
+    err = vkBindImageMemory(device, pTexture->image, vkdevicemem, 0);
 
 	//SERT PAS POUR L'INSTANT
 	VkImageSubresource subres{};
@@ -1533,7 +1493,7 @@ void CreateTextureFrom(	uint32_t tex_width,uint32_t tex_height,void* data,uint32
 		subres.arrayLayer = 0;
 		
 	VkSubresourceLayout layout_data;
-	vkGetImageSubresourceLayout(device, pTexture->texture, &subres, &layout_data);
+	vkGetImageSubresourceLayout(device, pTexture->image, &subres, &layout_data);
 	//CREATE COMMAND 
 	snCommand copyCmd;
 	copyCmd.Begin();
@@ -1547,9 +1507,9 @@ void CreateTextureFrom(	uint32_t tex_width,uint32_t tex_height,void* data,uint32
 	VkCommandBufferBeginInfo BeginInfo{};
 	BeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	BeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
+ 
 	vkBeginCommandBuffer(copyCmd,&BeginInfo);
-	CommandImgMemBarrier(copyCmd,pTexture->texture,VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	CommandImgMemBarrier(copyCmd,pTexture->image,VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 	
 	VkBufferImageCopy region = {};
         region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -1558,8 +1518,8 @@ void CreateTextureFrom(	uint32_t tex_width,uint32_t tex_height,void* data,uint32
         region.imageExtent.height = tex_height;
         region.imageExtent.depth = 1;
 		
-	vkCmdCopyBufferToImage(copyCmd,stage.vkbuffer,pTexture->texture,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-	CommandImgMemBarrier(copyCmd,pTexture->texture,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	vkCmdCopyBufferToImage(copyCmd,stage.vkbuffer,pTexture->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+	CommandImgMemBarrier(copyCmd,pTexture->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	err = vkEndCommandBuffer(copyCmd);
 	
 	//SUBMIT AND FREE COMMAND 
@@ -1569,15 +1529,15 @@ void CreateTextureFrom(	uint32_t tex_width,uint32_t tex_height,void* data,uint32
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &copyCmd.m_cmd;
 	err = vkQueueSubmit(graphicsQueue, 1, &submitInfo, copyCmd.fence);
-	
+	vkQueueWaitIdle(graphicsQueue);
 	copyCmd.End();
-	err = vkDeviceWaitIdle(device);
+	//err = vkDeviceWaitIdle(device);
 
 	VkImageViewCreateInfo img_view{};
     img_view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    img_view.image = pTexture->texture;
+    img_view.image = pTexture->image;
     img_view.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    img_view.format = VK_FORMAT_R8G8B8A8_SRGB;
+    img_view.format = VK_FORMAT_R8G8B8A8_UNORM;
     img_view.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1};
     img_view.components = {
                     VK_COMPONENT_SWIZZLE_IDENTITY,
@@ -1586,7 +1546,7 @@ void CreateTextureFrom(	uint32_t tex_width,uint32_t tex_height,void* data,uint32
                     VK_COMPONENT_SWIZZLE_IDENTITY,
                 };
 
-    err = vkCreateImageView(device,&img_view,nullptr,&pTexture->ivtexture);   
+    err = vkCreateImageView(device,&img_view,nullptr,&pTexture->imageview);   
     
     VkSamplerCreateInfo smp_info{};
     smp_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -1605,7 +1565,7 @@ void CreateTextureFrom(	uint32_t tex_width,uint32_t tex_height,void* data,uint32
     smp_info.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
     smp_info.unnormalizedCoordinates = VK_FALSE;
  
-    err = vkCreateSampler(device,&smp_info,nullptr,&pTexture->samptexture);
+    err = vkCreateSampler(device,&smp_info,nullptr,&pTexture->sampler);
 	stage.Release();
 }
 //Detruit le buffer
@@ -1613,9 +1573,9 @@ void Release()
 	{
 		if(pTexture)
 		{
-			vkDestroySampler(device,pTexture->samptexture, nullptr);
-			vkDestroyImageView(device, pTexture->ivtexture, nullptr);
-            vkDestroyImage(device, pTexture->texture, nullptr);
+			vkDestroySampler(device,pTexture->sampler, nullptr);
+			vkDestroyImageView(device, pTexture->imageview, nullptr);
+            vkDestroyImage(device, pTexture->image, nullptr);
 			delete pTexture;
 			pTexture = nullptr;
 		}			
@@ -1623,9 +1583,6 @@ void Release()
 		if(vkbuffer)vkDestroyBuffer(device,vkbuffer,nullptr);
 	}
 };
-
-
-
 void sn_Vulkandestroy()
 {
 	vkDeviceWaitIdle(device);
@@ -1665,11 +1622,9 @@ VkFormat findDepthFormat(VkPhysicalDevice physicalDevice) {
             physicalDevice
         );
     }
-
 extern unsigned char lunarg_ppm[];
 extern unsigned int lunarg_ppm_len;
-
-bool loadTexture(const char *filename, uint8_t *rgba_data, VkSubresourceLayout *layout, uint32_t *width, uint32_t *height) {
+bool loadTexture(const char *filename, uint8_t *rgba_data, uint32_t *width, uint32_t *height) {
     (void)filename;
     char *cPtr;
     cPtr = (char *)lunarg_ppm;
@@ -1697,11 +1652,10 @@ bool loadTexture(const char *filename, uint8_t *rgba_data, VkSubresourceLayout *
             rowPtr += 4;
             cPtr += 3;
         }
-        rgba_data += layout->rowPitch;
+        rgba_data += *width * 4;
     }
     return true;
 }
-
 #include <fstream>
 static std::vector<char> readFile(const std::string& filename) {
         std::ifstream file(filename, std::ios::ate | std::ios::binary);
@@ -1712,7 +1666,6 @@ static std::vector<char> readFile(const std::string& filename) {
         file.close();
         return buffer;
         }
-
 void Read_Obj()
 {
 	std::vector<char> object = readFile("suzan.obj");
@@ -1857,10 +1810,15 @@ void Read_Obj()
 	//Tout a été lu
 
 }
-
 //is a [] BY FRAMES
 #define SN_ARRAY_BY_FRAME
-struct SnSwapChain
+struct snBinding
+{
+	VkDescriptorSetLayoutBinding	Binding;
+	uint32_t 						count;
+	snBuffer*	SN_ARRAY_BY_FRAME	buffers = nullptr; 				
+};
+struct snSwapChain
 {
 	VkExtent2D window_size;
 	
@@ -1870,7 +1828,7 @@ struct SnSwapChain
     std::vector<VkImageView> 	swapChainImageViews;
     std::vector<VkFramebuffer> 	swapChainFramebuffers;
 
-	std::vector<snBuffer> textures;
+	std::vector<snBinding> bindings;
 	
 	VkCommandPool commandPool;
 	VkCommandBuffer SN_ARRAY_BY_FRAME 		*commandBuffers = nullptr; 		
@@ -1879,7 +1837,7 @@ struct SnSwapChain
 	VkDescriptorSetLayout 					descriptorSetLayout; 
 	VkDescriptorSet SN_ARRAY_BY_FRAME 		*descriptorsets = nullptr; 			
 	
-	snBuffer SN_ARRAY_BY_FRAME 				*uniforms = nullptr; 							
+	//snBuffer SN_ARRAY_BY_FRAME 				*uniforms = nullptr; 							
 
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
@@ -1915,15 +1873,6 @@ struct SnSwapChain
 		pm.ShaderStageInfo[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 		pm.ShaderStageInfo[1].pName = "main";
 
-		pm.PipeModel_CreateBindings(1);
-		
-		pm.bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		pm.bindings[0].binding = 0;
-		pm.bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-		pm.bindings[0].descriptorCount = 1;
-
-		
-		
 		pm.pipelineLayoutInfo.setLayoutCount = 1; //un par frame
 		pm.pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout; //<---- Ils servent ici un
 		
@@ -1937,83 +1886,64 @@ struct SnSwapChain
 		vkDestroyPipeline(device, graphicsPipeline, nullptr);
         vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
     }
-	void AssetsCreate(){
+
+	void DescriptorsCreate2()
+    {
+		snBinding bind{};
+		bind.Binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		bind.Binding.binding = 0;
+		bind.Binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		bind.Binding.descriptorCount = 1;
+		bind.Binding.pImmutableSamplers = nullptr;
+		bind.count = swap_imageCount;
+		bind.buffers = new snBuffer[bind.count];
+
+		for (size_t i = 0; i < swap_imageCount; i++) 
+			{
+				glm::mat4 matrice = glm::mat4(1.f);
+				bind.buffers[i].CreateUniformBuffer(glm::value_ptr(matrice),sizeof(glm::mat4));
+			}	
+
+		bindings.push_back(bind);
+
+		bind.Binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		bind.Binding.binding = 1;
+		bind.Binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		bind.Binding.descriptorCount = 1;
+		bind.Binding.pImmutableSamplers = nullptr;
+		bind.count = 1;
+		bind.buffers = new snBuffer;
+
 		uint32_t tex_width;
 		uint32_t tex_height;
-		loadTexture("pipo", NULL, NULL, &tex_width, &tex_height);
-		uint32_t* data = new uint32_t[tex_width*tex_height];
-		uint8_t* ptr_src = (uint8_t*)lunarg_ppm;
-		uint8_t* ptr_dst = (uint8_t*)data;
-		//Copy LUNARG
-		ptr_src+=15;
-		for(volatile int i=0;i<tex_width*tex_height;i++)
-		{
-			for(volatile int j=0;j<3;j++)
-			{
-				ptr_dst[j] = ptr_src[j];
-			}
-			ptr_dst[3]=255;
-			ptr_src+=3;
-			ptr_dst+=4;
-		}
-		snBuffer texturebuffer;
-		texturebuffer.CreateTextureFrom(
+		loadTexture("pipo", NULL, &tex_width, &tex_height);
+		uint8_t* data = new uint8_t[tex_width*tex_height*4];
+		loadTexture("pipo", data, &tex_width, &tex_height);
+		
+		bind.buffers[0].CreateTextureFrom(
 			tex_width,
 			tex_height,
 			data,
 			tex_width*tex_height*sizeof(uint32_t));
 
-		textures.push_back(texturebuffer);
-	}
-	void AssetsDestroy(){
-		for(volatile size_t i = 0; i < textures.size(); i++)textures[i].Release();
-	}
-	void BuffersCreate()
-	{
-		if(!uniforms)
+		bindings.push_back(bind);
+
+		VkDescriptorSetLayoutBinding* setLayoutBindings = new VkDescriptorSetLayoutBinding[bindings.size()];
+		for(volatile int i=0;i<bindings.size();i++)
 		{
-			uniforms = new snBuffer[swap_imageCount];
-			for (size_t i = 0; i < swap_imageCount; i++) 
-			{
-				glm::mat4 matrice = glm::mat4(1.f);
-				uniforms[i].CreateUniformBuffer(glm::value_ptr(matrice),sizeof(glm::mat4));
-			}	
+			setLayoutBindings[i] = bindings[i].Binding;
 		}
 		
-		
-
-	}
-	void BuffersDestroy()
-	{
-		for(size_t i = 0; i < swap_imageCount; i++)uniforms[i].Release();
-		
-	}
-	
-	void DescriptorsCreate()
-    {
-		//Read_Obj();
-		//Une liste de bindings pour le shader, un modele d'entrées
-		
-		VkDescriptorSetLayoutBinding setLayoutBindings{};
-		setLayoutBindings.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		// Shader binding point
-		setLayoutBindings.binding = 0;
-		// Accessible from the vertex shader only (flags can be combined to make it accessible to multiple shader stages)
-		setLayoutBindings.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-		// Binding contains one element (can be used for array bindings)
-		setLayoutBindings.descriptorCount = 1;
-		
-		// Create the descriptor set layout donc le modele d'entrées en un seul
 		VkDescriptorSetLayoutCreateInfo descriptorLayoutCI{};
 		descriptorLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		descriptorLayoutCI.bindingCount = 1; //Le nombre d'entrées de la liste
-		descriptorLayoutCI.pBindings = &setLayoutBindings;
+		descriptorLayoutCI.bindingCount = bindings.size(); //Le nombre d'entrées de la liste
+		descriptorLayoutCI.pBindings = setLayoutBindings;
 
-		//Le modèle des modèles 
-		
 		err = vkCreateDescriptorSetLayout(device, &descriptorLayoutCI, nullptr, &descriptorSetLayout);
 		if( err!= VK_SUCCESS){throw std::runtime_error("failed to create descriptor set layout!");}
-		
+
+		delete [] setLayoutBindings;
+
 		descriptorsets = new VkDescriptorSet[swap_imageCount];
 		//Les sets de ce modéle un par frame
 		
@@ -2028,36 +1958,62 @@ struct SnSwapChain
 			err = vkAllocateDescriptorSets(device, &allocateInfo, &descriptorsets[i]);
 			if( err!= VK_SUCCESS){throw std::runtime_error("failed to allocate descriptor sets!");}
 			
+			for (size_t j = 0; j < bindings.size(); j++) 
+			{	
 			VkWriteDescriptorSet writeDescriptorSets{};
-			VkDescriptorBufferInfo Buffer_info_UBO{};
-		
-			Buffer_info_UBO.buffer = uniforms[i].vkbuffer;
-			Buffer_info_UBO.offset = 0;
-			Buffer_info_UBO.range = uniforms[i].mem_size;
-
+			
+			
+    		
 			writeDescriptorSets.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			writeDescriptorSets.dstSet = descriptorsets[i];
-			writeDescriptorSets.dstBinding = 0;
+			writeDescriptorSets.dstBinding = j;
 			writeDescriptorSets.dstArrayElement = 0;
 			writeDescriptorSets.descriptorCount = 1;
-			writeDescriptorSets.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			writeDescriptorSets.pBufferInfo = &Buffer_info_UBO;
 			
-			vkUpdateDescriptorSets(device, 1, &writeDescriptorSets, 0, nullptr);
+			if(bindings[j].Binding.descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+				{
+				VkDescriptorBufferInfo Buffer_info_UBO{};
+				Buffer_info_UBO.buffer = bindings[j].buffers[i].vkbuffer;
+				Buffer_info_UBO.offset = 0;
+				Buffer_info_UBO.range = bindings[j].buffers[i].mem_size;
+				writeDescriptorSets.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				writeDescriptorSets.pBufferInfo = &Buffer_info_UBO;
+				vkUpdateDescriptorSets(device, 1, &writeDescriptorSets, 0, nullptr);
+				}
+			
+			if(bindings[j].Binding.descriptorType == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+				{
+				VkDescriptorImageInfo imageInfo{};
+				imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    			imageInfo.imageView = bindings[j].buffers[0].pTexture->imageview;
+    			imageInfo.sampler = bindings[j].buffers[0].pTexture->sampler;
+				writeDescriptorSets.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				writeDescriptorSets.pImageInfo = &imageInfo;
+				vkUpdateDescriptorSets(device, 1, &writeDescriptorSets, 0, nullptr);
+				}
+			}
 		}
-		
-    }
-	void DescriptorsDestroy()
+	}
+	void DescriptorsDestroy2()
     {
+		for (size_t j = 0; j < bindings.size(); j++) 
+		{
+			for (size_t i = 0; i < bindings[j].count; i++) 
+			{	
+				bindings[j].buffers[i].Release();
+			}
+			if(bindings[j].count > 1)
+				delete [] bindings[j].buffers;
+			else
+				delete bindings[j].buffers;
+		}	
+		
 		vkDeviceWaitIdle(device);
 		vkFreeDescriptorSets(device,descriptorPool,swap_imageCount,descriptorsets);
 		delete [] descriptorsets;
 		
 		vkDestroyDescriptorSetLayout(device,descriptorSetLayout,NULL);
     }
-	
-	
-
 	void SWAPCHAIN_Create(){
 		
 		VkSurfaceFormatKHR surfaceFormat = {
@@ -2333,31 +2289,29 @@ struct SnSwapChain
 		//SWAPCHAIN_MemoryBarrier(commandBuffers[i],swapChainImages[i],VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);	
 		vkCmdBeginRenderPass(commandBuffers[i],&renderPassBeginInfo,VK_SUBPASS_CONTENTS_INLINE);
 			
-			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
-		
+		VkViewport viewport{};
+		viewport.x = 0.0f;
+		viewport.y = 0.0f;
+		viewport.width = (float) window_size.width;
+		viewport.height = (float) window_size.height;
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+		vkCmdSetViewport(commandBuffers[i], 0, 1, &viewport);
 
-			VkViewport viewport{};
-			viewport.x = 0.0f;
-			viewport.y = 0.0f;
-			viewport.width = (float) window_size.width;
-			viewport.height = (float) window_size.height;
-			viewport.minDepth = 0.0f;
-			viewport.maxDepth = 1.0f;
-			vkCmdSetViewport(commandBuffers[i], 0, 1, &viewport);
+		VkRect2D scissor{};
+		scissor.offset = {0, 0};
+		scissor.extent = window_size;
+		vkCmdSetScissor(commandBuffers[i], 0, 1, &scissor);
 
-			VkRect2D scissor{};
-			scissor.offset = {0, 0};
-			scissor.extent = window_size;
-			vkCmdSetScissor(commandBuffers[i], 0, 1, &scissor);
+		vkCmdBindDescriptorSets(commandBuffers[i], 
+								VK_PIPELINE_BIND_POINT_GRAPHICS, 
+								pipelineLayout, 0, 1, &descriptorsets[i], 0, nullptr);
 
-			vkCmdBindDescriptorSets(commandBuffers[i], 
-									VK_PIPELINE_BIND_POINT_GRAPHICS, 
-									pipelineLayout, 0, 1, &descriptorsets[i], 0, nullptr);
-
-			//vkCmdBeginRendering(commandBuffers[i],&RenderingInfo);
-			vkCmdDraw(commandBuffers[i], 3, 1, 0, 0);
-			//vkCmdEndRendering(commandBuffers[i]);
+		//vkCmdBeginRendering(commandBuffers[i],&RenderingInfo);
+		vkCmdDraw(commandBuffers[i], 6, 1, 0, 0);
+		//vkCmdEndRendering(commandBuffers[i]);
 	
 		//SWAPCHAIN_MemoryBarrier(commandBuffers[i],swapChainImages[i],VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 		vkCmdEndRenderPass(commandBuffers[i]);
@@ -2438,16 +2392,9 @@ void SWAPCHAIN_Destroy(){
             vkDestroyFence(device, inFlightFences[i], nullptr);
         }
     }
-	
-	void CreateImgui()
-	{
-
-
-	}	
 	void LightUp()
 	{
-		BuffersCreate();
-		DescriptorsCreate();
+		DescriptorsCreate2();
 		SyncObjectsCreate();
 	}
 }ECRAN;
@@ -2458,8 +2405,7 @@ void EcranOn()
 void EcranOff()
 {
 	ECRAN.SWAPCHAIN_Destroy();
-	ECRAN.DescriptorsDestroy();
-	ECRAN.BuffersDestroy();
+	ECRAN.DescriptorsDestroy2();
 	
 }
 void rebuild(bool rebuild)
@@ -2468,26 +2414,22 @@ void rebuild(bool rebuild)
 		if(rebuild)ECRAN.SWAPCHAIN_Destroy();
 		ECRAN.SWAPCHAIN_Create();
 	}
-
-
 static float f = 0.0f;
+void sn_Updates(uint32_t imageIndex){     
 
-void Update_uniforms(uint32_t imageIndex){     
-
-		static float horloge = 0.f;
-		horloge += sn_interface.delta_time * f;// * glm::two_pi<float>();
+		static double horloge = 0.0;
+		horloge += sn_interface.delta_time * (double)f;// * glm::two_pi<float>();
 		
 		glm::mat4 Model = glm::mat4(1.0f);//glm::rotate(glm::mat4(1.0f), horloge, glm::vec3(0, 0, 1.f));
 		glm::mat4 project = glm::scale(glm::mat4(1.0f), glm::vec3(sn_interface.aspectH, sn_interface.aspectV, 1.f));
 		glm::mat4 trans = glm::translate(glm::mat4(1.0f),glm::vec3(sn_interface.wfX, sn_interface.wfY, 0.f));
 		
-		Model = trans * project * glm::rotate(glm::mat4(1.0f), horloge, glm::vec3(0, 0, 1.f));
-		memcpy(ECRAN.uniforms[imageIndex].mem_ptr,glm::value_ptr(Model),sizeof(glm::mat4));
-	}
+		Model = trans * project * glm::rotate(glm::mat4(1.0f), (float)horloge, glm::vec3(0, 0, 1.f));
 
+		memcpy(ECRAN.bindings[0].buffers[imageIndex].mem_ptr,glm::value_ptr(Model),sizeof(glm::mat4));
+}
 bool show_demo_window = true;
 bool show_another_window = false;
-
 void sn_Vulkandraw(){        
 
 	static uint32_t imageIndex = 0;
@@ -2666,10 +2608,10 @@ void sn_Vulkandraw(){
 		ImGui_ImplVulkan_RenderDrawData(draw_data, ECRAN.imgui_commandBuffers[imageIndex],VK_NULL_HANDLE);
 		//vkCmdEndRendering(ECRAN.imgui_commandBuffers[imageIndex]);
 		
-  		ECRAN.SWAPCHAIN_MemoryBarrier(ECRAN.imgui_commandBuffers[imageIndex],
+  		/*ECRAN.SWAPCHAIN_MemoryBarrier(ECRAN.imgui_commandBuffers[imageIndex],
 									ECRAN.swapChainImages[imageIndex],
 									VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-									VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+									VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);*/
 		
 		//Submit command buffer
 		//vkCmdEndRenderPass(ECRAN.imgui_commandBuffers[imageIndex]);
@@ -2705,7 +2647,7 @@ void sn_Vulkandraw(){
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = &ECRAN.renderFinishedSemaphores[ECRAN.currentFrame];
 
-	Update_uniforms(imageIndex);
+	sn_Updates(imageIndex);
 
 	err = vkQueueSubmit(graphicsQueue, 1, &submitInfo, ECRAN.inFlightFences[ECRAN.currentFrame]);
 
