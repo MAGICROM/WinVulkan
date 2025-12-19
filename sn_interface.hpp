@@ -1,6 +1,6 @@
 #define MOUSE_INPUT(x, maskpressed, maskreleased) \
-	if(raw->data.mouse.usButtonFlags & maskpressed)MouseBt[x].input_pressed(timestamp); \
-	if(raw->data.mouse.usButtonFlags & maskreleased)MouseBt[x].input_released(timestamp); 	
+	if(raw->data.mouse.usButtonFlags & maskpressed)sn_interface.MouseBt[x].input_pressed(timestamp); \
+	if(raw->data.mouse.usButtonFlags & maskreleased)sn_interface.MouseBt[x].input_released(timestamp); 	
 
 void sn_Interface::Wmousemove(void)
 {
@@ -72,39 +72,26 @@ long long sn_Interface::Tick()
 
 	return Tick;
 	}
-bool sn_Interface::Button_pressed(RAWINPUT* raw,int* pnum){
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_DOWN){*pnum=0;return true;}
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_UP){*pnum=0;return false;}
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_DOWN){*pnum=1;return true;}
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_UP){*pnum=1;return false;}
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_DOWN){*pnum=2;return true;}
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_UP){*pnum=2;return false;}
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_4_DOWN){*pnum=3;return true;}
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_4_UP){*pnum=3;return false;}
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_5_DOWN){*pnum=4;return true;}
-		if(raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_5_UP){*pnum=4;return false;}
-		return false;
-	}
-void sn_Interface::Mouse(RAWINPUT* raw, long timestamp)
+void Mouse(RAWINPUT* raw, long timestamp)
 	{
 		if(raw->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE)
 		{
-			mdY = raw->data.mouse.lLastY - mY;
-			mdX = raw->data.mouse.lLastX - mX;
+			sn_interface.mdY = raw->data.mouse.lLastY - sn_interface.mY;
+			sn_interface.mdX = raw->data.mouse.lLastX - sn_interface.mX;
 		}
 		else
 		{
-			mdY = raw->data.mouse.lLastY;
-			mdX = raw->data.mouse.lLastX;
+			sn_interface.mdY = raw->data.mouse.lLastY;
+			sn_interface.mdX = raw->data.mouse.lLastX;
 		}
-		mX = raw->data.mouse.lLastX;
-		mY = raw->data.mouse.lLastY;
-		radX += (float)mdX * 0.00152f;
-		radY += (float)mdY * 0.00152f;
-		if(radX > 1.f)radX = 1.f;
-		if(radX < -1.f)radX = -1.f;
-		if(radY > 1.f)radY = 1.f;
-		if(radY < -1.f)radY = -1.f;
+		sn_interface.mX = raw->data.mouse.lLastX;
+		sn_interface.mY = raw->data.mouse.lLastY;
+		sn_interface.radX += (float)sn_interface.mdX * 0.00152f;
+		sn_interface.radY += (float)sn_interface.mdY * 0.00152f;
+		if(sn_interface.radX > 1.f)sn_interface.radX = 1.f;
+		if(sn_interface.radX < -1.f)sn_interface.radX = -1.f;
+		if(sn_interface.radY > 1.f)sn_interface.radY = 1.f;
+		if(sn_interface.radY < -1.f)sn_interface.radY = -1.f;
 
 		MOUSE_INPUT(0, RI_MOUSE_LEFT_BUTTON_DOWN, RI_MOUSE_LEFT_BUTTON_UP)
 		MOUSE_INPUT(1, RI_MOUSE_RIGHT_BUTTON_DOWN, RI_MOUSE_RIGHT_BUTTON_UP)
@@ -114,18 +101,18 @@ void sn_Interface::Mouse(RAWINPUT* raw, long timestamp)
 
 		if(raw->data.mouse.usButtonFlags & RI_MOUSE_WHEEL)
 		{
-			wheelDelta += (short)raw->data.mouse.usButtonData;
-			baseexp += ((float)(short)raw->data.mouse.usButtonData)*.001f;
-			aspectH = base / destWidth; 		
-			aspectV = base / destHeight; 
-			base = 400.f * exp(baseexp);
+			sn_interface.wheelDelta += (short)raw->data.mouse.usButtonData;
+			sn_interface.baseexp += ((float)(short)raw->data.mouse.usButtonData)*.001f;
+			sn_interface.aspectH = sn_interface.base / sn_interface.destWidth; 		
+			sn_interface.aspectV = sn_interface.base / sn_interface.destHeight; 
+			sn_interface.base = 400.f * exp(sn_interface.baseexp);
 		}
 	}
-bool sn_Interface::Keyboard(RAWINPUT* raw, long timestamp)
+bool Keyboard(RAWINPUT* raw, long timestamp)
 	{
 		if(raw->data.keyboard.Flags == 0)
-			Keys[raw->data.keyboard.MakeCode].input_pressed(timestamp);
+			sn_interface.Keys[raw->data.keyboard.MakeCode].input_pressed(timestamp);
 		else
-			return Keys[raw->data.keyboard.MakeCode].input_released(timestamp);
+			return sn_interface.Keys[raw->data.keyboard.MakeCode].input_released(timestamp);
 		return false;
 	}

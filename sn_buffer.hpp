@@ -1,10 +1,38 @@
+struct snCommand
+{
+	VkCommandBuffer m_cmd;
+	VkFence fence;
+	void Begin()
+	{
+		VkCommandBufferAllocateInfo allocInfo{};
+			allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+			allocInfo.commandPool = transfercommandPool;
+			allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+			allocInfo.commandBufferCount = 1;
+				
+		vkAllocateCommandBuffers(device, &allocInfo, &m_cmd);
+
+		VkFenceCreateInfo fenceInfo{};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceInfo.flags = 0;
+		vkCreateFence(device, &fenceInfo, nullptr, &fence);
+	}
+	void End()
+	{
+		vkWaitForFences(device, 1, &fence, VK_TRUE, 100000000000);
+		vkDestroyFence(device, fence, nullptr);
+		vkFreeCommandBuffers(device, transfercommandPool, 1, &m_cmd);
+	}
+	operator VkCommandBuffer*(){return &m_cmd;};
+	operator VkCommandBuffer&(){return m_cmd;};
+	operator VkFence&(){return fence;};
+};
 struct snTexture
 {
 	VkImage image;
 	VkImageView imageview;
 	VkSampler sampler;
 };
-
 struct snBuffer
 { 
     alignas(16)
