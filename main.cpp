@@ -16,10 +16,13 @@ void sn_Vulkandraw();
 void Mouse(RAWINPUT* raw, long timestamp);
 bool Keyboard(RAWINPUT* raw, long timestamp);      
 
+//define USE_THREAD if you want wulkan on another thread
+//#define USE_THREAD
+//define USE_IMGUI_PLEASE_IFYOUCAN if you want imgui
+#define USE_IMGUI_PLEASE_IFYOUCAN
 
 //***********************************************************************************************************************************************************************
 //define USE_IMGUI_PLEASE_IFYOUCAN if you want imgui
-#define USE_IMGUI_PLEASE_IFYOUCAN
 #ifdef USE_IMGUI_PLEASE_IFYOUCAN
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);   
 #endif
@@ -364,7 +367,9 @@ DWORD WINAPI MyThreadFunction( LPVOID lpParam )
 
 //***********************************************************************************************************************************************************************
 #ifdef USE_IMGUI_PLEASE_IFYOUCAN
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
+#include "imGuIZMOquat.h"
 #include "imgui_impl_win32.h"
 #define VK_USE_PLATFORM_WIN32_KHR
 #include "imgui_impl_vulkan.h"
@@ -382,6 +387,12 @@ DWORD WINAPI MyThreadFunction( LPVOID lpParam )
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//     ### #####  ###  #####  ###   ###
+//    #      #   #   #   #     #   # 
+//    ####   #   #####   #     #   #
+//       #   #   #   #   #     #   #
+//    ###    #   #   #   #    ###   ###
 
 	//RUNNING INFLIGHT
 	uint32_t swap_imageCount;
@@ -430,6 +441,7 @@ DWORD WINAPI MyThreadFunction( LPVOID lpParam )
 #include"sn_interface.hpp"
 #include"sn_wulkan.hpp"
 #include"sn_buffer.hpp"
+#include"sn_pipeline.hpp"
 #include"sn_swapchain.hpp"
 
 

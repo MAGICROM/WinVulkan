@@ -19,11 +19,12 @@ struct sn_pipeline{
 	
 	VkDescriptorSetLayoutCreateInfo             set_layout{};
 	VkPipelineLayoutCreateInfo                  pipelineLayoutInfo{};
-	VkGraphicsPipelineCreateInfo                pipelineInfo{};
+	VkGraphicsPipelineCreateInfo                GfxPipelineInfo{};
 	
 	void PipeModel_Clear(){
 			memset(this,0,sizeof(sn_pipeline));
 		}
+
 	void PipeModel_CreateBindings(size_t numbers)
 		{
         	set_layout.bindingCount = numbers;
@@ -43,14 +44,15 @@ struct sn_pipeline{
 			}
 			set_layout.pBindings = bindings;
 		}
+
 	void PipeModel_CreateShaders(size_t numbers)
 		{
-			pipelineInfo.stageCount = numbers;
-			ShaderStageInfo = new VkPipelineShaderStageCreateInfo[pipelineInfo.stageCount];
-			Shaders = new VkShaderModuleCreateInfo[pipelineInfo.stageCount];
-			pipelineInfo.pStages = ShaderStageInfo;
+			GfxPipelineInfo.stageCount = numbers;
+			ShaderStageInfo = new VkPipelineShaderStageCreateInfo[GfxPipelineInfo.stageCount];
+			Shaders = new VkShaderModuleCreateInfo[GfxPipelineInfo.stageCount];
+			GfxPipelineInfo.pStages = ShaderStageInfo;
 
-			for(volatile int i = 0; i < pipelineInfo.stageCount; i++)
+			for(volatile int i = 0; i < GfxPipelineInfo.stageCount; i++)
 			{
 				//Segmentation fault prevention 1
 				memset(&ShaderStageInfo[i],0,sizeof(VkPipelineShaderStageCreateInfo));
@@ -77,7 +79,7 @@ struct sn_pipeline{
 		dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
 		set_layout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+		GfxPipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 
 		vertexInputInfo.vertexBindingDescriptionCount = 0;
 		vertexInputInfo.vertexAttributeDescriptionCount = 0;
@@ -129,7 +131,8 @@ struct sn_pipeline{
 			.pPushConstantRanges = 0
 		};
 
-        pipelineInfo ={
+        GfxPipelineInfo ={
+			.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 			.stageCount = 0,
 			.pStages = 0,
 			.pVertexInputState = &vertexInputInfo,
@@ -147,7 +150,7 @@ struct sn_pipeline{
 	}
 	void PipeModel_Proceed(VkRenderPass rp)
 	{
-		for(volatile int i = 0; i < pipelineInfo.stageCount; i++)
+		for(volatile int i = 0; i < GfxPipelineInfo.stageCount; i++)
 		{
 			VkShaderModuleCreateInfo createInfoSHD{};
 			createInfoSHD.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -164,15 +167,15 @@ struct sn_pipeline{
 		throw std::runtime_error("failed to create pipeline layout!");
 		}
 
-		pipelineInfo.layout = PipeLayout;
-		pipelineInfo.renderPass = rp;
+		GfxPipelineInfo.layout = PipeLayout;
+		GfxPipelineInfo.renderPass = rp;
 		
-		if(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &Pipe) != VK_SUCCESS) {
+		if(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &GfxPipelineInfo, nullptr, &Pipe) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create graphics pipeline!");
 		}
 
 
-		for(volatile int i = 0; i < pipelineInfo.stageCount; i++)
+		for(volatile int i = 0; i < GfxPipelineInfo.stageCount; i++)
 		{
 		vkDestroyShaderModule(device, ShaderStageInfo[i].module, nullptr);
 		}

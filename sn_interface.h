@@ -1,5 +1,4 @@
 #define DELAY_FAST 0.15f
-//#define USE_THREAD
 
 //Chaque touche et bouton
 struct sn_Key

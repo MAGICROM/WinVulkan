@@ -4,7 +4,6 @@ struct Vertex
 	glm::vec3 normale;
 	glm::vec2 uv;
 };
-
 struct Camera
 {
 	glm::vec3 position = glm::vec3(0.0f);
@@ -40,7 +39,6 @@ struct Camera
 		return World;
 	}
 };
-
 VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features,VkPhysicalDevice physicalDevice) {
         for (VkFormat format : candidates) {
             VkFormatProperties props;
@@ -65,7 +63,7 @@ VkFormat findDepthFormat(VkPhysicalDevice physicalDevice) {
     }
 extern unsigned char lunarg_ppm[];
 extern unsigned int lunarg_ppm_len;
-bool loadTexture(const char *filename, uint8_t *rgba_data, uint32_t *width, uint32_t *height) {
+bool loadTexturelunarG(const char *filename, uint8_t *rgba_data, uint32_t *width, uint32_t *height) {
     (void)filename;
     char *cPtr;
     cPtr = (char *)lunarg_ppm;
@@ -281,26 +279,24 @@ struct snSwapChain
 	
 	//snBuffer SN_ARRAY_BY_FRAME 				*uniforms = nullptr; 							
 
-	VkPipelineLayout pipelineLayout;
-	VkPipeline graphicsPipeline;
+	std::vector<sn_pipeline>		pipelines;
+	
+	
 
 	//SYNCHRO
 	
-	std::vector<VkSemaphore> imageAvailableSemaphores;
-    std::vector<VkSemaphore> renderFinishedSemaphores;
-    std::vector<VkFence> inFlightFences;
+	VkSemaphore renderSema;
+    VkSemaphore presentSema;
+    VkFence inFlightFence;
     uint32_t currentFrame = 0;
 
 	//Memory
-	
-	bool pipe = true;
-	void CreatePipeline()
+	void CreatePipelines()
 	{
-		PipeModel pm;
+		sn_pipeline pm;
 		
 		pm.PipeModel_Clear();
 		pm.PipeModel_PreFill();
-		
 		pm.PipeModel_CreateShaders(2);
 
 		auto vertShaderCode = readFile("shaders/vert.spv");
@@ -320,13 +316,15 @@ struct snSwapChain
 		
 		pm.PipeModel_Proceed(renderPass);
 
-		pipelineLayout = pm.PipeLayout;
-		graphicsPipeline = pm.Pipe;
+		pipelines.push_back(pm);
 	}
-	void DestroyPipeline()
+	void DestroyPipelines()
     {
-		vkDestroyPipeline(device, graphicsPipeline, nullptr);
-        vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+		for(volatile int c;c<pipelines.size();c++)
+		{
+			pipelines[c].PipeModel_Release();
+		}
+		pipelines.clear();
     }
 
 	void DescriptorsCreate2()
@@ -358,9 +356,9 @@ struct snSwapChain
 
 		uint32_t tex_width;
 		uint32_t tex_height;
-		loadTexture("pipo", NULL, &tex_width, &tex_height);
+		loadTexturelunarG("pipo", NULL, &tex_width, &tex_height);
 		uint8_t* data = new uint8_t[tex_width*tex_height*4];
-		loadTexture("pipo", data, &tex_width, &tex_height);
+		loadTexturelunarG("pipo", data, &tex_width, &tex_height);
 		
 		bind.buffers[0].CreateTextureFrom(
 			tex_width,
@@ -541,7 +539,7 @@ struct snSwapChain
 			colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 			colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 			colorAttachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; //VK_IMAGE_LAYOUT_UNDEFINED;
-			colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
 			//Mode clear activé
 			colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -590,7 +588,7 @@ struct snSwapChain
 
 			// STEP 9 PIPELINE
 			
-			CreatePipeline();
+			CreatePipelines();
 			
 			// STEP 10 FRAME BUFFERS
 			
@@ -729,7 +727,7 @@ struct snSwapChain
 		//SWAPCHAIN_MemoryBarrier(commandBuffers[i],swapChainImages[i],VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);	
 		vkCmdBeginRenderPass(commandBuffers[i],&renderPassBeginInfo,VK_SUBPASS_CONTENTS_INLINE);
 			
-		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[0].Pipe);
 
 		VkViewport viewport{};
 		viewport.x = 0.0f;
@@ -747,7 +745,7 @@ struct snSwapChain
 
 		vkCmdBindDescriptorSets(commandBuffers[i], 
 								VK_PIPELINE_BIND_POINT_GRAPHICS, 
-								pipelineLayout, 0, 1, &descriptorsets[i], 0, nullptr);
+								pipelines[0].PipeLayout, 0, 1, &descriptorsets[i], 0, nullptr);
 
 		//vkCmdBeginRendering(commandBuffers[i],&RenderingInfo);
 		vkCmdDraw(commandBuffers[i], 6, 1, 0, 0);
@@ -793,7 +791,7 @@ void SWAPCHAIN_Destroy(){
             vkDestroyFramebuffer(device, framebuffer, nullptr);
             }
 
-        DestroyPipeline();
+        DestroyPipelines();
         vkDestroyRenderPass(device, renderPass, nullptr);
 
         for (auto imageView : swapChainImageViews) {
@@ -804,9 +802,7 @@ void SWAPCHAIN_Destroy(){
     }
 	
 	void SyncObjectsCreate() {
-        imageAvailableSemaphores.resize(swap_imageCount);
-        renderFinishedSemaphores.resize(swap_imageCount);
-        inFlightFences.resize(swap_imageCount);
+       
 
         VkSemaphoreCreateInfo semaphoreInfo{};
         semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -815,22 +811,21 @@ void SWAPCHAIN_Destroy(){
         fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-        for (size_t i = 0; i < swap_imageCount; i++) {
-            if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]) != VK_SUCCESS ||
-                vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS ||
-                vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS) {
+       
+            if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderSema) != VK_SUCCESS ||
+                vkCreateSemaphore(device, &semaphoreInfo, nullptr, &presentSema) != VK_SUCCESS ||
+                vkCreateFence(device, &fenceInfo, nullptr, &inFlightFence) != VK_SUCCESS) {
                 throw std::runtime_error("failed to create synchronization objects for a frame!");
-            }
+            
         }
     }
 	
 	void SyncObjectsDestroy() {
-        for (size_t i = 0; i < swap_imageCount; i++)
-		{
-            vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
-            vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
-            vkDestroyFence(device, inFlightFences[i], nullptr);
-        }
+       
+            vkDestroySemaphore(device, presentSema, nullptr);
+            vkDestroySemaphore(device, renderSema, nullptr);
+            vkDestroyFence(device, inFlightFence, nullptr);
+       
     }
 	void LightUp()
 	{
@@ -873,11 +868,11 @@ bool show_another_window = false;
 void sn_Vulkandraw(){        
 
 	static uint32_t imageIndex = 0;
-	vkWaitForFences(device, 1, &ECRAN.inFlightFences[ECRAN.currentFrame], VK_TRUE, UINT64_MAX);
+	//vkWaitForFences(device, 1, &ECRAN.inFlightFence, VK_TRUE, UINT64_MAX);
 	err = vkAcquireNextImageKHR(device, 
 								ECRAN.swapChain, 
 								UINT64_MAX, 
-								ECRAN.imageAvailableSemaphores[ECRAN.currentFrame], 
+								ECRAN.presentSema, 
 								VK_NULL_HANDLE, 
 								&imageIndex);
 		if(err == VK_ERROR_OUT_OF_DATE_KHR)
@@ -890,7 +885,7 @@ void sn_Vulkandraw(){
 			
             throw std::runtime_error("failed to acquire swap chain image!");
         }
-	vkResetFences(device, 1, &ECRAN.inFlightFences[ECRAN.currentFrame]);
+	//vkResetFences(device, 1, &ECRAN.inFlightFence);
 	if(err == VK_ERROR_DEVICE_LOST)std::cout << "VK_ERROR_DEVICE_LOST" << std::endl;
 	if(err == VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT)std::cout << "VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT" << std::endl;
 	if(err == VK_ERROR_OUT_OF_DATE_KHR)std::cout << "VK_ERROR_OUT_OF_DATE_KHR" << std::endl;
@@ -960,6 +955,11 @@ void sn_Vulkandraw(){
             ImGui::Text("imageIndex = %d", imageIndex);
 
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+			static quat qrot1 = quat(1.0f,0.f,0.f,0.f);
+			ImGui::gizmo3D("##gizmo1",qrot1,200.f);
+
+
+
             ImGui::End();
         }
 
@@ -976,9 +976,9 @@ void sn_Vulkandraw(){
         // Rendering
         ImGui::Render();
 		
-        ImDrawData* draw_data = ImGui::GetDrawData();
+        
 		
-        const bool is_minimized = (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f);
+        
       
      	vkResetCommandBuffer(ECRAN.imgui_commandBuffers[imageIndex],VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
 		//err = vkResetCommandPool(device, ECRAN.commandPool, 0);
@@ -992,7 +992,7 @@ void sn_Vulkandraw(){
         VkRenderPassBeginInfo RPinfo = {};
         
 		RPinfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        RPinfo.renderPass = imgui_renderPass;
+        RPinfo.renderPass = renderPass;
         RPinfo.framebuffer = ECRAN.swapChainFramebuffers[imageIndex];
         RPinfo.renderArea.extent.width = sn_interface.destWidth;
         RPinfo.renderArea.extent.height = sn_interface.destHeight;
@@ -1045,6 +1045,7 @@ void sn_Vulkandraw(){
 		RenderingInfo.pDepthAttachment = &Depth;
 		
 		//vkCmdBeginRendering(ECRAN.imgui_commandBuffers[imageIndex],&RenderingInfo);
+		ImDrawData* draw_data = ImGui::GetDrawData();
 		ImGui_ImplVulkan_RenderDrawData(draw_data, ECRAN.imgui_commandBuffers[imageIndex],VK_NULL_HANDLE);
 		//vkCmdEndRendering(ECRAN.imgui_commandBuffers[imageIndex]);
 		
@@ -1074,7 +1075,7 @@ void sn_Vulkandraw(){
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = &ECRAN.imageAvailableSemaphores[ECRAN.currentFrame];
+	submitInfo.pWaitSemaphores = &ECRAN.presentSema;
 	submitInfo.pWaitDstStageMask = waitStages;
 	
 	#ifdef USE_IMGUI_PLEASE_IFYOUCAN
@@ -1085,11 +1086,11 @@ void sn_Vulkandraw(){
 
 	submitInfo.pCommandBuffers = batch;//&ECRAN.commandBuffers[imageIndex];
 	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = &ECRAN.renderFinishedSemaphores[ECRAN.currentFrame];
+	submitInfo.pSignalSemaphores = &ECRAN.renderSema;
 
 	sn_Updates(imageIndex);
 
-	err = vkQueueSubmit(graphicsQueue, 1, &submitInfo, ECRAN.inFlightFences[ECRAN.currentFrame]);
+	err = vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
 
 	if (err != VK_SUCCESS) {
 			if(err == VK_ERROR_OUT_OF_HOST_MEMORY)throw std::runtime_error("VK_ERROR_OUT_OF_HOST_MEMORY");
@@ -1102,7 +1103,7 @@ void sn_Vulkandraw(){
 		VkPresentInfoKHR presentInfo{};
 		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 		presentInfo.waitSemaphoreCount = 1;
-		presentInfo.pWaitSemaphores = &ECRAN.imageAvailableSemaphores[ECRAN.currentFrame];
+		presentInfo.pWaitSemaphores = &ECRAN.renderSema;
 		presentInfo.swapchainCount = 1;
 		presentInfo.pSwapchains = &ECRAN.swapChain;
 		presentInfo.pImageIndices = &imageIndex;

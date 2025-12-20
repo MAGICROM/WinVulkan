@@ -394,7 +394,7 @@ void CommandImgMemBarrier(VkCommandBuffer& buf,VkImage img,VkImageLayout de,VkIm
 	//Pour les shaders
 	if(de == VK_IMAGE_LAYOUT_UNDEFINED && a == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
 	{
-		memory_barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;//VK_ACCESS_TRANSFER_WRITE_BIT;
+		memory_barrier.srcAccessMask = 0;//VK_ACCESS_TRANSFER_WRITE_BIT;
 		memory_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 		Source = VK_PIPELINE_STAGE_HOST_BIT;
 		Destination = VK_PIPELINE_STAGE_TRANSFER_BIT;

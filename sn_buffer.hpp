@@ -192,7 +192,7 @@ void CreateTextureFrom(	uint32_t tex_width,uint32_t tex_height,void* data,uint32
     text_img.arrayLayers = 1;
     text_img.samples = VK_SAMPLE_COUNT_1_BIT;
     text_img.tiling = VK_IMAGE_TILING_LINEAR;
-    text_img.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+    text_img.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     text_img.flags = 0;
     text_img.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;   
 
