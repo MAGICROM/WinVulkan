@@ -192,7 +192,7 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
             createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
             createInfo.pQueueCreateInfos = queueCreateInfos.data();
             createInfo.pEnabledFeatures = &deviceFeatures;
-            createInfo.enabledExtensionCount = static_cast<uint32_t>(extNames.size());
+            createInfo.enabledExtensionCount = static_cast<uint32_t>(extNames.size()); //extNames
             createInfo.ppEnabledExtensionNames = extNames.data();
             //createInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
             //createInfo.ppEnabledLayerNames = layers.data();
@@ -208,17 +208,6 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
    		vkGetDeviceQueue(device, presentFamily, 0, &presentQueue);
 		vkGetDeviceQueue(device, transferFamily, 0, &transferQueue);
 		
-        
-        VkCommandPoolCreateInfo poolInfo{};
-		poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-		poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-		poolInfo.queueFamilyIndex = graphicsFamily;
-
-			if (vkCreateCommandPool(device, &poolInfo, nullptr, &transfercommandPool) != VK_SUCCESS) {
-				throw std::runtime_error("failed to create transfert command pool!");
-			}
-
-
 		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(carte_graphique, surface, &capabilities);
 
         uint32_t formatCount;
@@ -234,20 +223,6 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
                 vkGetPhysicalDeviceSurfacePresentModesKHR(carte_graphique, surface, &presentModeCount, presentModes.data());
             }
 
-		VkDescriptorPoolSize descriptorPoolSizes[] =
-		{	{ VK_DESCRIPTOR_TYPE_SAMPLER, 10 },
-			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 10 },
-			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 },
-			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 10 }
-		};
-
-		VkDescriptorPoolCreateInfo descriptorPoolCI = {};
-			descriptorPoolCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-			descriptorPoolCI.maxSets = 10 * (sizeof(descriptorPoolSizes)/sizeof(*descriptorPoolSizes));
-			descriptorPoolCI.poolSizeCount = (uint32_t)(sizeof(descriptorPoolSizes)/sizeof(*descriptorPoolSizes));
-			descriptorPoolCI.pPoolSizes = descriptorPoolSizes;
-	
-		err = vkCreateDescriptorPool(device, &descriptorPoolCI, nullptr, &descriptorPool);
 		swap_imageCount = capabilities.minImageCount + 1;
 
 		#ifdef USE_IMGUI_PLEASE_IFYOUCAN
@@ -346,7 +321,6 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
 		
 		
 		EcranOn();
-		rebuild(false);
 }
 uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) 
 {
@@ -429,13 +403,12 @@ void sn_Vulkandestroy()
 
 	#ifdef USE_IMGUI_PLEASE_IFYOUCAN           
 	   	ImGui_ImplVulkan_Shutdown();
-		vkFreeCommandBuffers(device,imgui_CommandPool,1,&imgui_CommandBuffer);
-		vkDestroyCommandPool(device, imgui_CommandPool, nullptr);
 		vkDestroyRenderPass(device, imgui_renderPass, nullptr);
 	#endif
 
     EcranOff();
-	vkDestroyDescriptorPool(device,descriptorPool,NULL);  
+	
+	//Close Device and all
 	vkDestroyDevice(device,NULL);
     vkDestroySurfaceKHR(instance,surface,NULL);
     vkDestroyInstance(instance, NULL);

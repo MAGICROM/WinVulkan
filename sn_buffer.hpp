@@ -1,5 +1,22 @@
+VkCommandPool transfercommandPool{VK_NULL_HANDLE};
+
 struct snCommand
 {
+static void TransfertCommandPool_Create()
+{	
+		VkCommandPoolCreateInfo poolInfo{};
+		poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+		poolInfo.queueFamilyIndex = graphicsFamily;
+
+			if (vkCreateCommandPool(device, &poolInfo, nullptr, &transfercommandPool) != VK_SUCCESS) {
+				throw std::runtime_error("failed to create transfert command pool!");
+			}
+}
+static void TransfertCommandPool_Destroy()
+{	
+	vkDestroyCommandPool(device,transfercommandPool,NULL);
+}
 	VkCommandBuffer m_cmd;
 	VkFence fence;
 	void Begin()
@@ -35,7 +52,8 @@ struct snTexture
 };
 struct snBuffer
 { 
-    alignas(16)
+
+	alignas(16)
 //If is set the buffer is a texture
 	snTexture* 		pTexture = nullptr;
 //Pointer set on a shared memory address

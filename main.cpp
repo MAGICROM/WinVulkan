@@ -18,8 +18,8 @@ bool Keyboard(RAWINPUT* raw, long timestamp);
 
 //define USE_THREAD if you want wulkan on another thread
 //#define USE_THREAD
-//define USE_IMGUI_PLEASE_IFYOUCAN if you want imgui
-#define USE_IMGUI_PLEASE_IFYOUCAN
+//uncomment USE_IMGUI_PLEASE_IFYOUCAN if you want imgui
+//#define USE_IMGUI_PLEASE_IFYOUCAN
 
 //***********************************************************************************************************************************************************************
 //define USE_IMGUI_PLEASE_IFYOUCAN if you want imgui
@@ -30,7 +30,7 @@ extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam
 
 bool run_vulkan = true;
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)						
-{																									\
+{																									
 
 //***********************************************************************************************************************************************************************
 #ifdef USE_IMGUI_PLEASE_IFYOUCAN
@@ -423,21 +423,15 @@ DWORD WINAPI MyThreadFunction( LPVOID lpParam )
     VkRenderPass renderPass;
 
 	//MEMORY--------------------------------------------------------------------
-	VkDescriptorPool descriptorPool;
-	VkCommandPool transfercommandPool;
+	
+	
 
 	//IMGUI---------------------------------------------------------------------
 #ifdef USE_IMGUI_PLEASE_IFYOUCAN
 	VkDescriptorPool imgui_pDescriptorPool;
-	VkCommandPool imgui_CommandPool;
-	VkCommandBuffer imgui_CommandBuffer;
 	VkRenderPass imgui_renderPass;
 #endif
 	
-	void rebuild(bool);
-	void Buffers(uint32_t swap_imageCount);
-	
-
 #include"sn_interface.hpp"
 #include"sn_wulkan.hpp"
 #include"sn_buffer.hpp"
