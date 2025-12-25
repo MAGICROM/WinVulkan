@@ -13,7 +13,7 @@ void sn_Interface::ChangeSize(unsigned short Width,unsigned short Height)
 	
 	destWidth = Width;
 	destHeight = Height;
-	aspectratio = (float)Height/(float)Width;
+	aspectratio = (float)destWidth/(float)destHeight;
 	aspectH = base / destWidth; 		
 	aspectV = base / Height; 
 

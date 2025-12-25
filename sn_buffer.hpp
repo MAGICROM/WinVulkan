@@ -83,6 +83,7 @@ void CreateBuffer(VkBufferUsageFlagBits usage,uint32_t size){
                 				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     mem_info.allocationSize = mem_reqs.size;
 	err = vkAllocateMemory(device,&mem_info,nullptr,&vkdevicemem);
+	if(err==VK_SUCCESS)mem_size = mem_reqs.size;
 }
 //Cree un buffer sur la carte graphique et visible par le cpu
 void CreateAndCopyBuffer(VkBufferUsageFlagBits usage,void *Src,uint32_t size,bool unmap){
@@ -146,7 +147,8 @@ void CreateIndexBuffer(uint32_t size){
 	}
 //Copy sur le gpu des données depuis le cpu
 void CopyFrom(snBuffer& buffer){
-	
+	err = vkBindBufferMemory(device, vkbuffer, vkdevicemem, 0);
+	err = vkBindBufferMemory(device, buffer.vkbuffer, buffer.vkdevicemem, 0);
 	//CREATE COMMAND 
 	VkCommandBufferAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -182,7 +184,7 @@ void CopyFrom(snBuffer& buffer){
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &copyCmd;
-	vkQueueSubmit(transferQueue, 1, &submitInfo, fence);
+	err = vkQueueSubmit(transferQueue, 1, &submitInfo, fence);
 	vkWaitForFences(device, 1, &fence, VK_TRUE, 100000000000);
 	vkDestroyFence(device, fence, nullptr);
 	vkFreeCommandBuffers(device, transfercommandPool, 1, &copyCmd);
@@ -336,7 +338,7 @@ void Release()
 			delete pTexture;
 			pTexture = nullptr;
 		}			
-			vkFreeMemory(device,vkdevicemem,nullptr);
+		if(vkdevicemem)vkFreeMemory(device,vkdevicemem,nullptr);
 		if(vkbuffer)vkDestroyBuffer(device,vkbuffer,nullptr);
 	}
 };

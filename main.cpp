@@ -19,7 +19,7 @@ bool Keyboard(RAWINPUT* raw, long timestamp);
 //define USE_THREAD if you want wulkan on another thread
 //#define USE_THREAD
 //uncomment USE_IMGUI_PLEASE_IFYOUCAN if you want imgui
-//#define USE_IMGUI_PLEASE_IFYOUCAN
+#define USE_IMGUI_PLEASE_IFYOUCAN
 
 //***********************************************************************************************************************************************************************
 //define USE_IMGUI_PLEASE_IFYOUCAN if you want imgui
@@ -78,7 +78,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		else if (raw->header.dwType == RIM_TYPEMOUSE) 
 		{
 			Mouse(raw, sn_interface.c_start);		
-
+			/*std::cout << " lLastX=" << sn_interface.mdX
+					  << " lLastY=" << sn_interface.mdY
+					  << std::endl;*/
 			/*std::cout << MouseBt[0].timestamp << std::endl;
 			std::cout << MouseBt[1].timestamp << std::endl;
 			std::cout << MouseBt[2].timestamp << std::endl;
@@ -375,13 +377,15 @@ DWORD WINAPI MyThreadFunction( LPVOID lpParam )
 #include "imgui_impl_vulkan.h"
 #endif
 //***********************************************************************************************************************************************************************
-
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_win32.h>
 #include <vector>
 #include <set>
+#include <array>
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
