@@ -15,6 +15,42 @@ struct snCamera
 	float z_near = 0.1f;
 	float z_far = 50.0f;
 	
+	void Proceed_Keys()
+	{
+		if(sn_interface.Keys[17].pressed)
+		{
+			v3_position -= v3_forward * (float)sn_interface.delta_time;
+		}
+		if(sn_interface.Keys[31].pressed)
+		{
+			v3_position += v3_forward * (float)sn_interface.delta_time;
+		}
+		if(sn_interface.Keys[32].pressed)
+		{
+			v3_position += v3_right * (float)sn_interface.delta_time;
+		}
+		if(sn_interface.Keys[30].pressed)
+		{
+			v3_position -= v3_right * (float)sn_interface.delta_time;
+		}
+		if(sn_interface.Keys[46].pressed)
+		{
+			v3_position += v3_up * (float)sn_interface.delta_time;
+		}
+		if(sn_interface.Keys[18].pressed)
+		{
+			v3_position -= v3_up * (float)sn_interface.delta_time;
+		}
+		if(sn_interface.Keys[74].pressed)
+		{
+			Change_fov(-sn_interface.delta_time);
+		}
+		if(sn_interface.Keys[78].pressed)
+		{
+			Change_fov(sn_interface.delta_time);
+		}
+	}
+		
 	void Change_fov(float move)
 	{
 		focale+=move * 4.f;
@@ -945,38 +981,7 @@ void sn_Updates(uint32_t imageIndex){
 		&ECRAN.uboVS,
 		ECRAN.pipelines[1].Descriptor.bindings[0].buffers[0].mem_size);
 
-		if(sn_interface.Keys[17].pressed)
-		{
-			camera.v3_position -= camera.v3_forward * (float)sn_interface.delta_time;
-		}
-		if(sn_interface.Keys[31].pressed)
-		{
-			camera.v3_position += camera.v3_forward * (float)sn_interface.delta_time;
-		}
-		if(sn_interface.Keys[32].pressed)
-		{
-			camera.v3_position += camera.v3_right * (float)sn_interface.delta_time;
-		}
-		if(sn_interface.Keys[30].pressed)
-		{
-			camera.v3_position -= camera.v3_right * (float)sn_interface.delta_time;
-		}
-		if(sn_interface.Keys[46].pressed)
-		{
-			camera.v3_position += camera.v3_up * (float)sn_interface.delta_time;
-		}
-		if(sn_interface.Keys[18].pressed)
-		{
-			camera.v3_position -= camera.v3_up * (float)sn_interface.delta_time;
-		}
-		if(sn_interface.Keys[74].pressed)
-		{
-			camera.Change_fov(-sn_interface.delta_time);
-		}
-		if(sn_interface.Keys[78].pressed)
-		{
-			camera.Change_fov(sn_interface.delta_time);
-		}
+		
 
 
 

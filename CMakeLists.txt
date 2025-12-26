@@ -42,9 +42,9 @@ add_library(imguizmo ${PROJECT_SOURCE_DIR}/deps/imGuIZMO.quat/imguizmo_quat/imGu
 target_include_directories(imguizmo PRIVATE ${PROJECT_SOURCE_DIR}/deps/imGuIZMO.quat/imguizmo_quat/
                                             ${PROJECT_SOURCE_DIR}/deps/)
 
-add_executable(${PROJECT_NAME} main.cpp 
-			Vulkanus_Circuit_sim_gradient.cpp 
-			Vulkan.cpp ) 
+add_executable(${PROJECT_NAME} cpp/main.cpp 
+			cpp/Vulkanus_Circuit_sim_gradient.cpp 
+			cpp/Vulkan.cpp ) 
 
 target_include_directories(${PROJECT_NAME} PRIVATE 
     ${VULKAN_INCLUDE_DIR}
