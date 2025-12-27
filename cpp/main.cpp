@@ -7,16 +7,18 @@
 #include <chrono>
 
 #include "sn_interface.h"
+
 //Initialize pour win32
 void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd);
 //Cleanup
 void sn_Vulkandestroy();
 //Acquire and present
 void sn_Vulkandraw();
+
 void Mouse(RAWINPUT* raw, long timestamp);
 bool Keyboard(RAWINPUT* raw, long timestamp);      
 
-//define USE_THREAD if you want wulkan on another thread
+//uncomment USE_THREAD if you want wulkan on another thread
 //#define USE_THREAD
 //uncomment USE_IMGUI_PLEASE_IFYOUCAN if you want imgui
 #define USE_IMGUI_PLEASE_IFYOUCAN
@@ -381,12 +383,13 @@ DWORD WINAPI MyThreadFunction( LPVOID lpParam )
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
+
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_win32.h>
+
+#include <array>
 #include <vector>
 #include <set>
-#include <array>
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

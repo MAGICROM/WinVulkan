@@ -8,6 +8,13 @@ static void check_vk_result(VkResult err)
     if (err < 0)
         abort();
 }
+
+
+/*int Platform_CreateVkSurface(ImGuiViewport *vp, ImU64 vk_inst, const void *vk_allocators, ImU64 *out_vk_surface)
+{
+
+}*/
+
 void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
 {
     std::vector<const char*> extensions_present_names;
@@ -231,6 +238,12 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
         ImGuiIO& io = ImGui::GetIO(); (void)io;
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+		
+		//io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+		//ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
+		//platform_io.Platform_CreateVkSurface = Platform_CreateVkSurface;
+
+
         ImGui::StyleColorsDark();
         //ImGui_ImplGlfw_InitForVulkan(window, true);
 		// Setup scaling
@@ -404,10 +417,13 @@ void sn_Vulkandestroy()
 	#ifdef USE_IMGUI_PLEASE_IFYOUCAN           
 	   	ImGui_ImplVulkan_Shutdown();
 		vkDestroyRenderPass(device, imgui_renderPass, nullptr);
+		vkDestroyDescriptorPool(device,imgui_pDescriptorPool,NULL);
 	#endif
 
     EcranOff();
 	
+	
+		
 	//Close Device and all
 	vkDestroyDevice(device,NULL);
     vkDestroySurfaceKHR(instance,surface,NULL);

@@ -42,6 +42,9 @@ add_library(imguizmo ${PROJECT_SOURCE_DIR}/deps/imGuIZMO.quat/imguizmo_quat/imGu
 target_include_directories(imguizmo PRIVATE ${PROJECT_SOURCE_DIR}/deps/imGuIZMO.quat/imguizmo_quat/
                                             ${PROJECT_SOURCE_DIR}/deps/)
 
+#==============================================================================
+# APPLICATION
+
 add_executable(${PROJECT_NAME} cpp/main.cpp 
 			cpp/Vulkanus_Circuit_sim_gradient.cpp 
 			cpp/Vulkan.cpp ) 
@@ -62,7 +65,7 @@ imguizmo
 Dwmapi.lib
 :vulkan-1.dll )
 #==============================================================================
-# COMPILE SHADERS
+# AUTO COMPILE SHADERS
 #
 
 find_package(Vulkan REQUIRED COMPONENTS glslc)

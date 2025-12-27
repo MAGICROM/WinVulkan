@@ -4,32 +4,37 @@ struct Vertex
 	glm::vec3 normale;
 	glm::vec2 uv;
 
-	static VkVertexInputBindingDescription getBinding() {
-		VkVertexInputBindingDescription bindingDescription{};
+	static VkPipelineVertexInputStateCreateInfo VertexInputState()
+	{
+		static VkPipelineVertexInputStateCreateInfo info;
+		
+		static VkVertexInputBindingDescription bindingDescription{};
 		bindingDescription.binding = 0;
 		bindingDescription.stride = sizeof(Vertex);
 		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-		return bindingDescription;
-	}
 
-	static std::array<VkVertexInputAttributeDescription, 3> getAttribs() {
-    std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
-	attributeDescriptions[0].binding = 0;
-	attributeDescriptions[0].location = 0;
-	attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-	attributeDescriptions[0].offset = offsetof(Vertex, position);
-	
-	attributeDescriptions[1].binding = 0;
-	attributeDescriptions[1].location = 1;
-	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-	attributeDescriptions[1].offset = offsetof(Vertex, normale);
-	
-	attributeDescriptions[2].binding = 0;
-	attributeDescriptions[2].location = 2;
-	attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-	attributeDescriptions[2].offset = offsetof(Vertex, uv);
+		static VkVertexInputAttributeDescription attributeDescriptions[3];
+		attributeDescriptions[0].binding = 0;
+		attributeDescriptions[0].location = 0;
+		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+		attributeDescriptions[0].offset = offsetof(Vertex, position);
+		
+		attributeDescriptions[1].binding = 0;
+		attributeDescriptions[1].location = 1;
+		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+		attributeDescriptions[1].offset = offsetof(Vertex, normale);
+		
+		attributeDescriptions[2].binding = 0;
+		attributeDescriptions[2].location = 2;
+		attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
+		attributeDescriptions[2].offset = offsetof(Vertex, uv);
 
-    return attributeDescriptions;
+		info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+		info.vertexBindingDescriptionCount = 1;
+		info.pVertexBindingDescriptions = &bindingDescription;
+		info.vertexAttributeDescriptionCount = 3;
+		info.pVertexAttributeDescriptions = attributeDescriptions;
+		return info;
 	}
 };
 VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features,VkPhysicalDevice physicalDevice) {
@@ -318,6 +323,24 @@ uint32_t Read_Obj(void** ppVertex,void** ppIndex)
 }
 //is a [] BY FRAMES
 #define SN_ARRAY_BY_FRAME
+struct UBOVS{
+		glm::mat4 projection;
+		glm::mat4 view;
+		glm::vec4 lightPos = glm::vec4(0.0f, -5.0f, 0.0f, 1.0f);
+		float locSpeed = 0.0f;
+		float globSpeed = 0.0f;
+static VkDescriptorSetLayoutBinding BindLayout()
+	{
+	VkDescriptorSetLayoutBinding Binding;
+	Binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	Binding.binding = 0;
+	Binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	Binding.descriptorCount = 1;
+	Binding.pImmutableSamplers = nullptr;
+	return Binding;
+	}
+};
+	
 struct snBinding
 {
 	VkDescriptorSetLayoutBinding	Binding;
@@ -464,6 +487,23 @@ struct snPipeline
 void PipeModel_Clear(){
 	memset(this,0,sizeof(snPipeline));
 }
+void PipeModel_LoadShader(int x,const std::string &filename,const char* fun,VkShaderStageFlagBits stage)
+{
+	auto ShaderCode = readFile(filename);
+
+	char* ptr = new char[ShaderCode.size()];
+	Shaders[x].pCode = (uint32_t*)ptr;
+	//Cree une copie jusque a la creation du pipeline
+	for(volatile int i=0;i<ShaderCode.size();i++)
+	{
+		ptr[i] = ShaderCode[i];
+	}
+	Shaders[x].codeSize = ShaderCode.size();
+	ShaderStageInfo[x].stage = stage;
+	//nom de la fonction dans le shader
+	ShaderStageInfo[x].pName = fun;
+}
+	
 void PipeModel_CreateShaders(size_t numbers){
 			GfxPipelineInfo.stageCount = numbers;
 			ShaderStageInfo = new VkPipelineShaderStageCreateInfo[GfxPipelineInfo.stageCount];
@@ -523,9 +563,15 @@ void PipeModel_Prepare(){
         multisampling.sampleShadingEnable = VK_FALSE;
         multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-        colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-        colorBlendAttachment.blendEnable = VK_FALSE;
-
+		colorBlendAttachment.blendEnable = VK_FALSE;
+		colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+		colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+		colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+		colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+		colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+		colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+		colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+		
         colorBlending.logicOpEnable = VK_FALSE;
         colorBlending.logicOp = VK_LOGIC_OP_COPY;
         colorBlending.attachmentCount = 1;
@@ -606,6 +652,17 @@ void PipeModel_Create(VkRenderPass rp){
 		}
 		
 		if(ShaderStageInfo)delete [] ShaderStageInfo;
+		if(Shaders)
+		{
+			for(volatile int i=0;i<GfxPipelineInfo.stageCount;i++)
+			{
+				char* ptr = (char*)Shaders[i].pCode;
+				delete [] ptr;
+			}
+
+			
+			delete [] Shaders;
+		}
 		if(dynamicStates)delete [] dynamicStates;
 		if(bindings)delete [] bindings; 
 	};

@@ -14,7 +14,11 @@ struct snCamera
 	
 	float z_near = 0.1f;
 	float z_far = 50.0f;
-	
+
+	float m_yaw = glm::pi<float>() * 1;
+	float m_pitch = glm::pi<float>() * 0;
+	float m_limitpitch = glm::pi<float>()*0.5f-0.0001f;
+
 	void Proceed_Keys()
 	{
 		if(sn_interface.Keys[17].pressed)
@@ -50,13 +54,30 @@ struct snCamera
 			Change_fov(sn_interface.delta_time);
 		}
 	}
-		
 	void Change_fov(float move)
 	{
 		focale+=move * 4.f;
 		fov = 2.f * glm::atan(18.f/focale);
 	}
-	void Orientation(float yaw = .0f,float pitch =.0f,float roll=.0f)
+	void Corrige_Assiette()
+	{
+		glm::vec3 v3_corr = glm::cross(v3_up,glm::vec3(0,0,1));
+		float lenght = glm::dot(v3_corr,v3_corr);
+		if(lenght > 1.17549e-38)
+		{
+			
+			float cor_sin = glm::sin(lenght * sn_interface.delta_time);
+			float cor_cos = glm::cos(lenght * sn_interface.delta_time);
+			v3_corr = glm::normalize(v3_corr);
+
+			qt_orientation = glm::normalize(
+			qt_orientation * glm::quat(cor_cos,
+				  cor_sin*v3_corr.x,
+				  cor_sin*v3_corr.y,
+				  cor_sin*v3_corr.z));
+		}
+	}
+	void Orientation1(float yaw = .0f,float pitch =.0f,float roll=.0f)
 	{
 		qt_orientation = glm::lookAtLH(v3_position,v3_position+v3_forward,v3_up);
 		
@@ -76,6 +97,8 @@ struct snCamera
 				  pitch_sin*v3_right.y,
 				  pitch_sin*v3_right.z));
 				  
+		Corrige_Assiette();
+		
 		//Get Rotation matrix
 		m4_Rotation = glm::mat4_cast(qt_orientation);
 		//Get Axis
@@ -83,7 +106,38 @@ struct snCamera
 		v3_up = glm::normalize(glm::vec3(m4_Rotation[0][1],m4_Rotation[1][1],m4_Rotation[2][1]));
 		v3_forward =glm::normalize(glm::vec3(m4_Rotation[0][2],m4_Rotation[1][2],m4_Rotation[2][2]));
 	}
-	
+	void Orientation2(float yaw = .0f,float pitch =.0f,float roll=.0f)
+	{
+		m_yaw -= yaw * 2.f;
+		m_pitch -= pitch * 2.f;
+
+		if(m_pitch > m_limitpitch)
+		m_pitch = m_limitpitch;
+		if(m_pitch < -m_limitpitch)
+		m_pitch = -m_limitpitch;
+		
+		float yaw_sin = glm::sin(m_yaw);
+		float yaw_cos = glm::cos(m_yaw);
+		float pitch_sin = glm::sin(m_pitch);
+		float pitch_cos = glm::cos(m_pitch);
+		
+		v3_forward.x = yaw_sin * pitch_cos;
+       	v3_forward.z = pitch_sin;
+		v3_forward.y = yaw_cos * pitch_cos;
+        
+		v3_right.x = glm::sin(m_yaw + 1.5707963263216916398f);
+       	v3_right.z = 0.f;
+		v3_right.y = glm::cos(m_yaw + 1.5707963263216916398f);
+        
+		v3_up = glm::normalize(glm::cross(v3_forward,v3_right));
+		qt_orientation = glm::lookAtLH(v3_position,v3_position+v3_forward,v3_up);
+		//Get Rotation matrix
+		m4_Rotation = glm::mat4_cast(qt_orientation);
+		//Get Axis
+		v3_right = glm::normalize(glm::vec3(m4_Rotation[0][0],m4_Rotation[1][0],m4_Rotation[2][0]));
+		v3_up = glm::normalize(glm::vec3(m4_Rotation[0][1],m4_Rotation[1][1],m4_Rotation[2][1]));
+		v3_forward =glm::normalize(glm::vec3(m4_Rotation[0][2],m4_Rotation[1][2],m4_Rotation[2][2]));
+	}
 	glm::mat4 LookAtFirstPerson()
 	{
 		m4_projection = glm::perspectiveLH(fov,
@@ -97,12 +151,8 @@ struct snCamera
 		glm::mat4 World = m4_Rotation * Translation;
 		return World;
 	}
-	
-	
-
-   
-
 }camera;
+
 struct snSwapChain
 {
 	VkExtent2D window_size;
@@ -131,20 +181,18 @@ struct snSwapChain
 	VkSemaphore renderSema{VK_NULL_HANDLE};
     VkSemaphore presentSema{VK_NULL_HANDLE};
     VkFence inFlightFence{VK_NULL_HANDLE};
-
-	struct UBOVS {
-		glm::mat4 projection;
-		glm::mat4 view;
-		glm::vec4 lightPos = glm::vec4(0.0f, -5.0f, 0.0f, 1.0f);
-		float locSpeed = 0.0f;
-		float globSpeed = 0.0f;
-	} uboVS;
-
-	
-uint32_t num_vertex = 0;
+		
+	uint32_t num_vertex = 0;
+	UBOVS uboVS;
 
 void LoadAssets()
 	{
+		LWCMODEL* pModel;
+		uint32_t num_vertices = readLwcFile("assets/objets/fontaine.lwc",&pModel);
+		
+		
+		
+		
 		Vertex* pVertex;
 		num_vertex = Read_Obj((void**)&pVertex,nullptr);
 		if(pVertex)
@@ -168,18 +216,8 @@ void Pipelines_create()
 	pm.PipeModel_Clear();
 	pm.PipeModel_Prepare();
 	pm.PipeModel_CreateShaders(2);
-
-	auto vertShaderCode = readFile("shaders/vert.spv");
-	pm.Shaders[0].pCode = reinterpret_cast<const uint32_t*>(vertShaderCode.data());
-	pm.Shaders[0].codeSize = vertShaderCode.size();
-	pm.ShaderStageInfo[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-	pm.ShaderStageInfo[0].pName = "main";
-	
-	auto fragShaderCode = readFile("shaders/frag.spv");
-	pm.Shaders[1].pCode = reinterpret_cast<const uint32_t*>(fragShaderCode.data());
-	pm.Shaders[1].codeSize = fragShaderCode.size();
-	pm.ShaderStageInfo[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	pm.ShaderStageInfo[1].pName = "main";
+	pm.PipeModel_LoadShader(0,"shaders/vert.spv","main",VK_SHADER_STAGE_VERTEX_BIT);
+	pm.PipeModel_LoadShader(1,"shaders/frag.spv","main",VK_SHADER_STAGE_FRAGMENT_BIT);
 
 	snBinding bind{};
 	bind.Binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -231,38 +269,21 @@ void Pipelines_create()
 	pm2.PipeModel_Clear();
 	pm2.PipeModel_Prepare();
 	pm2.PipeModel_CreateShaders(2);
+	pm2.PipeModel_LoadShader(0,"shaders/instancing.vert.spv","main",VK_SHADER_STAGE_VERTEX_BIT);
+	pm2.PipeModel_LoadShader(1,"shaders/instancing.frag.spv","main",VK_SHADER_STAGE_FRAGMENT_BIT);
+	pm2.vertexInputInfo = Vertex::VertexInputState();
 
-	auto vertShaderCode2 = readFile("shaders/instancing.vert.spv");
-	pm2.Shaders[0].pCode = reinterpret_cast<const uint32_t*>(vertShaderCode2.data());
-	pm2.Shaders[0].codeSize = vertShaderCode2.size();
-	pm2.ShaderStageInfo[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-	pm2.ShaderStageInfo[0].pName = "main";
-	
-	auto fragShaderCode2 = readFile("shaders/instancing.frag.spv");
-	pm2.Shaders[1].pCode = reinterpret_cast<const uint32_t*>(fragShaderCode2.data());
-	pm2.Shaders[1].codeSize = fragShaderCode2.size();
-	pm2.ShaderStageInfo[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	pm2.ShaderStageInfo[1].pName = "main";
-
-	VkVertexInputBindingDescription bon = Vertex::getBinding();
-	
-	pm2.vertexInputInfo.vertexBindingDescriptionCount = 1;
-	pm2.vertexInputInfo.pVertexBindingDescriptions = &bon;
-	pm2.vertexInputInfo.vertexAttributeDescriptionCount = 3;
-	pm2.vertexInputInfo.pVertexAttributeDescriptions = Vertex::getAttribs().data();
-			
-	bind.Binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	bind.Binding.binding = 0;
-	bind.Binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	bind.Binding.descriptorCount = 1;
-	bind.Binding.pImmutableSamplers = nullptr;
+	bind.Binding = UBOVS::BindLayout();
 	bind.count = 1;
 	bind.buffers = new snBuffer;
 	bind.buffers->CreateUniformBuffer(&uboVS,sizeof(UBOVS));
+	pm2.Descriptor.bindings.push_back(bind);
+	pm2.Descriptor.DescriptorsCreate();
 
+	//Rasterizer
 	pm2.rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
 	pm2.rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;//VK_FRONT_FACE_CLOCKWISE VK_FRONT_FACE_COUNTER_CLOCKWISE
-	
+	//Z Buffer
 	VkPipelineDepthStencilStateCreateInfo Dinfo = {};
 	Dinfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 	Dinfo.depthTestEnable = VK_TRUE;
@@ -270,11 +291,8 @@ void Pipelines_create()
 	Dinfo.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 	Dinfo.back.compareOp = VK_COMPARE_OP_ALWAYS;
 	pm2.GfxPipelineInfo.pDepthStencilState = &Dinfo;
-
-	pm2.Descriptor.bindings.push_back(bind);
-	pm2.Descriptor.DescriptorsCreate();
-	pm2.PipeModel_Create(renderPass);
 	
+	pm2.PipeModel_Create(renderPass);
 	pipelines.push_back(pm2);
 	}
 
@@ -311,33 +329,32 @@ void commandbuffers_create()
 {
 		// STEP 11 POOL BUFFER SYNC
 
-			VkCommandPoolCreateInfo poolInfo{};
-			poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-			poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-			poolInfo.queueFamilyIndex = graphicsFamily;
+		VkCommandPoolCreateInfo poolInfo{};
+		poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+		poolInfo.queueFamilyIndex = graphicsFamily;
 
-			if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
-				throw std::runtime_error("failed to create command pool!");
-			}
+		if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create command pool!");
+		}
 
-			VkCommandBufferAllocateInfo allocInfo{};
-			allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-			allocInfo.commandPool = commandPool;
-			allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-			allocInfo.commandBufferCount = swap_imageCount;
+		VkCommandBufferAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		allocInfo.commandPool = commandPool;
+		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		allocInfo.commandBufferCount = swap_imageCount;
 
-			commandBuffers = new VkCommandBuffer[swap_imageCount];
-			
-			
-			if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers) != VK_SUCCESS) {
-				throw std::runtime_error("failed to allocate command buffers!");
-			}
+		commandBuffers = new VkCommandBuffer[swap_imageCount];
+		
+		if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers) != VK_SUCCESS) {
+			throw std::runtime_error("failed to allocate command buffers!");
+		}
 
-			imgui_commandBuffers = new VkCommandBuffer[swap_imageCount];
-			
-			if (vkAllocateCommandBuffers(device, &allocInfo, imgui_commandBuffers) != VK_SUCCESS) {
-				throw std::runtime_error("failed to allocate command buffers!");
-			}
+		imgui_commandBuffers = new VkCommandBuffer[swap_imageCount];
+		
+		if (vkAllocateCommandBuffers(device, &allocInfo, imgui_commandBuffers) != VK_SUCCESS) {
+			throw std::runtime_error("failed to allocate command buffers!");
+		}
 			
 		for (size_t i = 0; i < swap_imageCount; i++) 
 		{	
@@ -970,22 +987,15 @@ void sn_Updates(uint32_t imageIndex){
 
 		sn_interface.mdX * (float)sn_interface.delta_time;
 		
-		
-		camera.Orientation((float)sn_interface.mdX * (float)sn_interface.delta_time,(float)-sn_interface.mdY * (float)sn_interface.delta_time,0.f);
-		sn_interface.mdX = 0;
-		sn_interface.mdY = 0;
-		glm::mat4 World = camera.LookAtFirstPerson();
-		ECRAN.uboVS.projection = camera.m4_projection;
-		ECRAN.uboVS.view = World;
+		camera.Proceed_Keys();
+		camera.Orientation2((float)sn_interface.mdX * (float)sn_interface.delta_time,(float)-sn_interface.mdY * (float)sn_interface.delta_time,0.f);
+		sn_interface.mdX = 0;sn_interface.mdY = 0;
+		glm::mat4 WorldView = camera.LookAtFirstPerson();
+		ECRAN.uboVS.projection = 	camera.m4_projection;
+		ECRAN.uboVS.view = 			WorldView;
 		memcpy(ECRAN.pipelines[1].Descriptor.bindings[0].buffers[0].mem_ptr,
-		&ECRAN.uboVS,
-		ECRAN.pipelines[1].Descriptor.bindings[0].buffers[0].mem_size);
-
-		
-
-
-
-
+			   &ECRAN.uboVS,
+			   ECRAN.pipelines[1].Descriptor.bindings[0].buffers[0].mem_size);
 }
 void sn_Vulkandraw(){        
 
