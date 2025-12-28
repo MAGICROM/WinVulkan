@@ -231,7 +231,11 @@ uint32_t readLwcFile(const char* filename,LWCMODEL** ppModel){
     uint32_t chunk_size=0;
     uint32_t layers=0;
     uint32_t vert_size=0;
-    //FORM//////////////////////////////////////////////////////////////////
+    
+	glm::mat4 identity(1.0f);
+	glm::mat4 mSelfRotation = glm::rotate(identity, glm::pi<float>() * 0.5f, glm::vec3(1, 0, 0));
+	mSelfRotation = glm::rotate(mSelfRotation, glm::pi<float>(), glm::vec3(0, 0, 1));
+	//FORM//////////////////////////////////////////////////////////////////
     chunk = READ_ON(uint32_t);
     chunk_size = READ_ON(uint32_t);
     if(chunk!=LWC_ID_FORM)return 0;
@@ -264,7 +268,10 @@ uint32_t readLwcFile(const char* filename,LWCMODEL** ppModel){
         for(uint32_t dwN=0;dwN<vertices;dwN++)
         {
             pVertices[dwN] = READ_ON(Vertex);
-            (*ppModel)->dwNumVertex++;
+			
+			//pVertices[dwN].position = mSelfRotation * glm::vec4(pVertices[dwN].position,0);
+			//pVertices[dwN].normale = mSelfRotation * glm::vec4(pVertices[dwN].normale,0);
+			(*ppModel)->dwNumVertex++;
         } 
         (*ppModel)->Vertices.UnLock();
     }
@@ -299,7 +306,7 @@ uint32_t readLwcFile(const char* filename,LWCMODEL** ppModel){
 			}
 		
 		uint32_t localchunksize = READ_ON(uint32_t);
-        glm::mat4 identity(1.0f);
+       
 		
 		for(DWORD dwN=0;dwN<dwNumBone;dwN++)
 			{

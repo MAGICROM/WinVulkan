@@ -1,6 +1,5 @@
 void EcranOn();
 void EcranOff();
-
 /*int Platform_CreateVkSurface(ImGuiViewport *vp, ImU64 vk_inst, const void *vk_allocators, ImU64 *out_vk_surface)
 {
 

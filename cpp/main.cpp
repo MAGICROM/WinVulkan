@@ -21,7 +21,7 @@ bool Keyboard(RAWINPUT* raw, long timestamp);
 //uncomment USE_THREAD if you want wulkan on another thread
 //#define USE_THREAD
 //uncomment USE_IMGUI_PLEASE_IFYOUCAN if you want imgui
-#define USE_IMGUI_PLEASE_IFYOUCAN
+//#define USE_IMGUI_PLEASE_IFYOUCAN
 
 //***********************************************************************************************************************************************************************
 //define USE_IMGUI_PLEASE_IFYOUCAN if you want imgui
@@ -427,7 +427,7 @@ DWORD WINAPI MyThreadFunction( LPVOID lpParam )
 	
 	//DRIVER VULKAN-------------------------------------------------------------
     VkDevice device;
-    VkRenderPass renderPass;
+   
 
 	//MEMORY--------------------------------------------------------------------
 

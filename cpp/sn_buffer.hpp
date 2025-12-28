@@ -1,15 +1,19 @@
 VkCommandPool transfercommandPool{VK_NULL_HANDLE};
-
+VkCommandPool commandPool{VK_NULL_HANDLE};
 struct snCommand
 {
+
+VkCommandBuffer m_cmd;
+VkFence fence;
+	
 static void TransfertCommandPool_Create()
 {	
 		VkCommandPoolCreateInfo poolInfo{};
 		poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 		poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-		poolInfo.queueFamilyIndex = graphicsFamily;
+		poolInfo.queueFamilyIndex = transferFamily;
 
-			if (vkCreateCommandPool(device, &poolInfo, nullptr, &transfercommandPool) != VK_SUCCESS) {
+		if (vkCreateCommandPool(device, &poolInfo, nullptr, &transfercommandPool) != VK_SUCCESS) {
 				throw std::runtime_error("failed to create transfert command pool!");
 			}
 }
@@ -17,15 +21,14 @@ static void TransfertCommandPool_Destroy()
 {	
 	vkDestroyCommandPool(device,transfercommandPool,NULL);
 }
-	VkCommandBuffer m_cmd;
-	VkFence fence;
-	void Begin()
+	
+	void Begin(VkCommandPool pool)
 	{
 		VkCommandBufferAllocateInfo allocInfo{};
-			allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-			allocInfo.commandPool = transfercommandPool;
-			allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-			allocInfo.commandBufferCount = 1;
+		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		allocInfo.commandPool = commandPool;
+		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		allocInfo.commandBufferCount = 1;
 				
 		vkAllocateCommandBuffers(device, &allocInfo, &m_cmd);
 
@@ -38,7 +41,7 @@ static void TransfertCommandPool_Destroy()
 	{
 		vkWaitForFences(device, 1, &fence, VK_TRUE, 100000000000);
 		vkDestroyFence(device, fence, nullptr);
-		vkFreeCommandBuffers(device, transfercommandPool, 1, &m_cmd);
+		vkFreeCommandBuffers(device, commandPool, 1, &m_cmd);
 	}
 	operator VkCommandBuffer*(){return &m_cmd;};
 	operator VkCommandBuffer&(){return m_cmd;};
@@ -123,7 +126,7 @@ void CreateAndCopyBuffer(VkBufferUsageFlagBits usage,void *Src,uint32_t size,boo
         .size = size
 		};
         err = vkFlushMappedMemoryRanges(device, 1, &range);
-        if(Src)vkUnmapMemory(device,vkdevicemem);
+        vkUnmapMemory(device,vkdevicemem);
         }
 
     mem_size = size;
@@ -148,7 +151,7 @@ void CreateIndexBuffer(uint32_t size){
 //Copy sur le gpu des données depuis le cpu
 void CopyFrom(snBuffer& buffer){
 	err = vkBindBufferMemory(device, vkbuffer, vkdevicemem, 0);
-	err = vkBindBufferMemory(device, buffer.vkbuffer, buffer.vkdevicemem, 0);
+
 	//CREATE COMMAND 
 	VkCommandBufferAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -240,7 +243,7 @@ void CreateTextureFrom(	uint32_t tex_width,uint32_t tex_height,void* data,uint32
 	vkGetImageSubresourceLayout(device, pTexture->image, &subres, &layout_data);
 	//CREATE COMMAND 
 	snCommand copyCmd;
-	copyCmd.Begin();
+	copyCmd.Begin(commandPool);
 	
 	VkBufferCopy copyRegion = {};
 	copyRegion.srcOffset = 0;

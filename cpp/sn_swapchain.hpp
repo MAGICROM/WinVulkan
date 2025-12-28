@@ -169,9 +169,11 @@ struct snSwapChain
 	} Zbuffer;
 
 	//DRAWING
+	VkRenderPass renderPass;
+		
 	uint32_t currentFrame = 0;
 	std::vector<snPipeline>	pipelines;
-	VkCommandPool commandPool{VK_NULL_HANDLE};
+	
 	VkCommandBuffer SN_ARRAY_BY_FRAME 		*commandBuffers = nullptr; 		
 	VkCommandBuffer SN_ARRAY_BY_FRAME 		*imgui_commandBuffers = nullptr; 
 	
@@ -267,7 +269,7 @@ void Pipelines_create()
 		tex_width*tex_height*sizeof(uint32_t));
 
 	pm.Descriptor.bindings.push_back(bind);
-	
+	pm.GfxPipelineInfo.subpass = 1;
 	pm.Descriptor.DescriptorsCreate();
 	pm.PipeModel_Create(renderPass);
 	
@@ -291,6 +293,7 @@ void Pipelines_create()
 	pm2.Descriptor.DescriptorsCreate();
 
 	//Rasterizer
+	pm2.rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 	pm2.rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
 	pm2.rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;//VK_FRONT_FACE_CLOCKWISE VK_FRONT_FACE_COUNTER_CLOCKWISE
 	//Z Buffer
@@ -338,16 +341,6 @@ void Pipelines_destroy()
 void commandbuffers_create()
 {
 		// STEP 11 POOL BUFFER SYNC
-
-		VkCommandPoolCreateInfo poolInfo{};
-		poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-		poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-		poolInfo.queueFamilyIndex = graphicsFamily;
-
-		if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
-			throw std::runtime_error("failed to create command pool!");
-		}
-
 		VkCommandBufferAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 		allocInfo.commandPool = commandPool;
@@ -371,21 +364,20 @@ void commandbuffers_create()
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		
+		VkClearValue clearValues[2];
+		clearValues[0].color = {{0.3f, 0.3f, 0.3f, 1.0f}};
+		clearValues[1].depthStencil = { 1.0f, 0 };
+		
 		VkRenderPassBeginInfo renderPassBeginInfo{};
 		renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		renderPassBeginInfo.renderPass = renderPass;
 		renderPassBeginInfo.framebuffer = swapChainFramebuffers[i];
 		renderPassBeginInfo.renderArea.offset = {0, 0};
 		renderPassBeginInfo.renderArea.extent = window_size;
-		
-		VkClearValue clearValues[2];
-		clearValues[0].color = {{0.3f, 0.3f, 0.3f, 1.0f}};
-		clearValues[1].depthStencil = { 1.0f, 0 };
-		VkClearValue clearColor = {{0.3f, 0.3f, 0.3f, 1.0f}};
 		renderPassBeginInfo.clearValueCount = 2;
 		renderPassBeginInfo.pClearValues = clearValues;
 		
-		VkClearValue* pClearColor = &clearColor;
+		/*VkClearValue* pClearColor = &clearColor;
 		VkClearValue* pDepthValue = nullptr;
 
 		VkRenderingAttachmentInfoKHR Color = {};
@@ -426,7 +418,7 @@ void commandbuffers_create()
 		RenderingInfo.viewMask = 0;
 		RenderingInfo.colorAttachmentCount = 1;
 		RenderingInfo.pColorAttachments = &Color;
-		RenderingInfo.pDepthAttachment = &Depth;
+		RenderingInfo.pDepthAttachment = &Depth;*/
 
 		if (vkBeginCommandBuffer(commandBuffers[i], &beginInfo) != VK_SUCCESS) 
 			throw std::runtime_error("failed to begin recording command buffer!");
@@ -442,13 +434,12 @@ void commandbuffers_create()
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 		vkCmdSetViewport(commandBuffers[i], 0, 1, &viewport);
-
+		
 		VkRect2D scissor{};
 		scissor.offset = {0, 0};
 		scissor.extent = window_size;
 		vkCmdSetScissor(commandBuffers[i], 0, 1, &scissor);	
-		
-		
+				
 		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[1].Pipe);
 		vkCmdBindDescriptorSets(commandBuffers[i], 
 								VK_PIPELINE_BIND_POINT_GRAPHICS, 
@@ -459,10 +450,10 @@ void commandbuffers_create()
 		vkCmdDraw(commandBuffers[i], models_nv[0], 1, 0, 0);//num_vertex
 		
 		
+		
+		
 		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[0].Pipe);
-
-	
-
+		vkCmdNextSubpass(commandBuffers[i],VK_SUBPASS_CONTENTS_INLINE);
 		vkCmdBindDescriptorSets(commandBuffers[i], 
 								VK_PIPELINE_BIND_POINT_GRAPHICS, 
 								pipelines[0].PipeLayout, 0, 1, &pipelines[0].Descriptor.descriptorsets[i], 0, nullptr);
@@ -494,11 +485,7 @@ void commandbuffers_destroy()
 			imgui_commandBuffers = nullptr;
 			}
 
-		if(commandPool)
-			{
-			vkDestroyCommandPool(device, commandPool, nullptr);
-			commandPool = VK_NULL_HANDLE;
-			}
+		
 }
 //-------------------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------------------		
@@ -614,16 +601,19 @@ void renderpasses_Create()
 			depthReference.attachment = 1;
 			depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-			VkSubpassDescription subpass = {};
-			subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-			subpass.colorAttachmentCount = 1;
-			subpass.pColorAttachments = &colorReference;
-			subpass.pDepthStencilAttachment = &depthReference;
-			subpass.inputAttachmentCount = 0;
-			subpass.pInputAttachments = nullptr;
-			subpass.preserveAttachmentCount = 0;
-			subpass.pPreserveAttachments = nullptr;
-			subpass.pResolveAttachments = nullptr;
+			VkSubpassDescription subpass[2] = {};
+			subpass[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+			subpass[0].colorAttachmentCount = 1;
+			subpass[0].pColorAttachments = &colorReference;
+			subpass[0].pDepthStencilAttachment = &depthReference;
+			subpass[0].inputAttachmentCount = 0;
+			subpass[0].pInputAttachments = nullptr;
+			subpass[0].preserveAttachmentCount = 0;
+			subpass[0].pPreserveAttachments = nullptr;
+			subpass[0].pResolveAttachments = nullptr;
+			
+			subpass[1] = subpass[0];
+			subpass[1].pDepthStencilAttachment = 0;
 
 			VkSubpassDependency dependencies[2];
 			dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -646,11 +636,11 @@ void renderpasses_Create()
 			renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 			renderPassInfo.attachmentCount = 2;
 			renderPassInfo.pAttachments = attachs;
-			renderPassInfo.subpassCount = 1;
-			renderPassInfo.pSubpasses = &subpass;
+			renderPassInfo.subpassCount = 2;
+			renderPassInfo.pSubpasses = subpass;
 			renderPassInfo.dependencyCount = 2;
 			renderPassInfo.pDependencies = dependencies;
-
+			
 			err = vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass);
 			if( err!= VK_SUCCESS){
 					throw std::runtime_error("failed to create render pass!!");
@@ -711,7 +701,10 @@ void SyncObjects_Destroy() {
        
     }
 void SWAPCHAIN_Create(){
-		// Store the current swap chain handle so we can use it later on to ease up recreation
+	
+
+		
+	// Store the current swap chain handle so we can use it later on to ease up recreation
 	VkSwapchainKHR oldSwapchain = swapChain;
 
 	// Get physical device surface properties and formats
@@ -902,6 +895,7 @@ void SWAPCHAIN_Create(){
 	DepthStencil_Create();
 
 	for (size_t i = 0; i < swapChainImageViews.size(); i++) {
+		
 		VkImageView attachments[] = {
 			swapChainImageViews[i],
 			Zbuffer.view
@@ -937,7 +931,7 @@ void SWAPCHAIN_Resize()
 		
 	}
 void SWAPCHAIN_Destroy(){
-		
+					
 		if(renderSema)delete [] renderSema;
 		renderSema = nullptr;
 		
@@ -956,6 +950,13 @@ void SWAPCHAIN_Destroy(){
 void LightUp()
 	{
 		snCommand::TransfertCommandPool_Create();
+		VkCommandPoolCreateInfo poolInfo{};
+		poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+		poolInfo.queueFamilyIndex = graphicsFamily;
+		if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create command pool!");
+		}
 		
 		LoadAssets();
 		
@@ -980,6 +981,11 @@ void LightDown()
 		SWAPCHAIN_Destroy();
 		commandbuffers_destroy();
 		
+		if(commandPool)
+			{
+			vkDestroyCommandPool(device, commandPool, nullptr);
+			commandPool = VK_NULL_HANDLE;
+			}
 
 		Pipelines_destroy(); // III
 		renderpasses_Destroy(); // II
