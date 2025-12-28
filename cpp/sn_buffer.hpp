@@ -316,6 +316,7 @@ void Lock( uint32_t where, uint32_t size, void* *lptr, uint32_t flags = 0)
 {
 	range = new VkMappedMemoryRange;//VK_WHOLE_SIZE
 	range->sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+	range->pNext = nullptr;
 	range->size = size;
 	range->offset = where;
 	range->memory = vkdevicemem;

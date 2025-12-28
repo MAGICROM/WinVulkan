@@ -443,6 +443,7 @@ DWORD WINAPI MyThreadFunction( LPVOID lpParam )
 #include"sn_wulkan.hpp"
 #include"sn_buffer.hpp"
 #include"sn_pipeline.hpp"
+#include"sn_lwc.hpp"
 #include"sn_swapchain.hpp"
 
 

@@ -175,26 +175,36 @@ struct snSwapChain
 	VkCommandPool commandPool{VK_NULL_HANDLE};
 	VkCommandBuffer SN_ARRAY_BY_FRAME 		*commandBuffers = nullptr; 		
 	VkCommandBuffer SN_ARRAY_BY_FRAME 		*imgui_commandBuffers = nullptr; 
-	std::vector<snBuffer> models; 				
+	
+	std::vector<snBuffer> models;
+	std::vector<uint32_t> models_nv; 				 				
 	
 	//SYNCHRO
-	VkSemaphore renderSema{VK_NULL_HANDLE};
+	VkSemaphore* renderSema{VK_NULL_HANDLE};
     VkSemaphore presentSema{VK_NULL_HANDLE};
     VkFence inFlightFence{VK_NULL_HANDLE};
 		
-	uint32_t num_vertex = 0;
 	UBOVS uboVS;
 
 void LoadAssets()
 	{
 		LWCMODEL* pModel;
 		uint32_t num_vertices = readLwcFile("assets/objets/fontaine.lwc",&pModel);
-		
+		if(pModel)
+		{
+			snBuffer fontaine;
+			fontaine.CreateVertexBuffer(pModel->dwNumVertex*sizeof(Vertex));
+			fontaine.CopyFrom(pModel->Vertices);
+			
+			models.push_back(fontaine);
+			models_nv.push_back(pModel->dwNumVertex);
+			delete pModel;
+		}
 		
 		
 		
 		Vertex* pVertex;
-		num_vertex = Read_Obj((void**)&pVertex,nullptr);
+		uint32_t num_vertex = Read_Obj((void**)&pVertex,nullptr);
 		if(pVertex)
 		{
 			snBuffer stage;
@@ -206,6 +216,7 @@ void LoadAssets()
 			stage.Release();
 			delete [] pVertex;
 			models.push_back(suzanne);
+			models_nv.push_back(num_vertex);
 		}
 	}
 
@@ -446,7 +457,7 @@ void commandbuffers_create()
 		VkDeviceSize offsets[] = {0};
 		vkCmdBindVertexBuffers(commandBuffers[i],0,1,&models[0].vkbuffer,offsets);
 		//vkCmdDrawIndirect(commandBuffers[i],models[0].vkbuffer,0,num_vertex,sizeof(Vertex));
-		vkCmdDraw(commandBuffers[i], num_vertex, 1, 0, 0);//num_vertex
+		vkCmdDraw(commandBuffers[i], models_nv[0], 1, 0, 0);//num_vertex
 		
 		
 		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[0].Pipe);
@@ -659,27 +670,41 @@ void SyncObjects_Create() {
 			fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 			fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-       
-		if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderSema) != VK_SUCCESS ||
-			vkCreateSemaphore(device, &semaphoreInfo, nullptr, &presentSema) != VK_SUCCESS ||
-			vkCreateFence(device, &fenceInfo, nullptr, &inFlightFence) != VK_SUCCESS) {
+		if(!renderSema)renderSema = new VkSemaphore[swap_imageCount];
+		
+		for(int i=0;i<swap_imageCount;i++)
+		{
+		if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderSema[i]) != VK_SUCCESS)
+			throw std::runtime_error("failed to create synchronization objects for a frame!");
+		}
+		
+		if(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &presentSema) != VK_SUCCESS)
+			throw std::runtime_error("failed to create synchronization objects for a frame!");
+
+		if(vkCreateFence(device, &fenceInfo, nullptr, &inFlightFence) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create synchronization objects for a frame!");
 		
         }
     }
 void SyncObjects_Destroy() {
        
-            if(presentSema)
+	for(int i=0;i<swap_imageCount;i++)
+		{
+          
+            if(renderSema)
+			if(renderSema[i])
+				{
+					vkDestroySemaphore(device, renderSema[i], nullptr);
+					renderSema[i] = VK_NULL_HANDLE;
+				}
+		}
+         
+			if(presentSema)
 				{
 					vkDestroySemaphore(device, presentSema, nullptr);
 					presentSema = VK_NULL_HANDLE;
 				}
-            if(renderSema)
-				{
-					vkDestroySemaphore(device, renderSema, nullptr);
-					renderSema = VK_NULL_HANDLE;
-				}
-            if(inFlightFence)
+	    if(inFlightFence)
 				{
 					vkDestroyFence(device, inFlightFence, nullptr);
 					inFlightFence = VK_NULL_HANDLE;
@@ -813,6 +838,8 @@ void SWAPCHAIN_Create(){
 		swapchainCI.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	}
 
+	swap_imageCount = desiredNumberOfSwapchainImages;
+
 	err = vkCreateSwapchainKHR(device, &swapchainCI, nullptr, &swapChain);
 	if(err != VK_SUCCESS) {
 				throw std::runtime_error("failed to create swap chain!");
@@ -912,6 +939,9 @@ void SWAPCHAIN_Resize()
 	}
 void SWAPCHAIN_Destroy(){
 		
+		if(renderSema)delete [] renderSema;
+		renderSema = nullptr;
+		
 		DepthStencil_Destroy();
 		
 		for (auto framebuffer : swapChainFramebuffers) {
@@ -947,9 +977,10 @@ void LightDown()
 			model.Release();
 		}
 		
+		SyncObjects_Destroy();
 		SWAPCHAIN_Destroy();
 		commandbuffers_destroy();
-		SyncObjects_Destroy();
+		
 
 		Pipelines_destroy(); // III
 		renderpasses_Destroy(); // II
@@ -1199,7 +1230,7 @@ void sn_Vulkandraw(){
 	submitInfo.waitSemaphoreCount = 1;
 	submitInfo.pWaitSemaphores = &ECRAN.presentSema;
 	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = &ECRAN.renderSema;
+	submitInfo.pSignalSemaphores = &ECRAN.renderSema[imageIndex];
 
 	submitInfo.pWaitDstStageMask = waitStages;
 	#ifdef USE_IMGUI_PLEASE_IFYOUCAN
@@ -1224,7 +1255,7 @@ void sn_Vulkandraw(){
 		VkPresentInfoKHR presentInfo{};
 		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 		presentInfo.waitSemaphoreCount = 1;
-		presentInfo.pWaitSemaphores = &ECRAN.renderSema;
+		presentInfo.pWaitSemaphores = &ECRAN.renderSema[imageIndex];
 		presentInfo.swapchainCount = 1;
 		presentInfo.pSwapchains = &ECRAN.swapChain;
 		presentInfo.pImageIndices = &imageIndex;

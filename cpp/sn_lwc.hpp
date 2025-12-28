@@ -160,8 +160,23 @@ struct LWCMODEL
     LPSKELETON_SQUELETTE	l_pSQUELETTE = nullptr;
 
    void PrepareSquelette(void);
+   void	Release(void);
+   ~LWCMODEL(){
+			  Release();
+              if(pLayers)delete[]pLayers;
+			  }
 };
 
+void LWCMODEL::Release(void)
+{
+    Vertices.Release();
+    Indexes.Release();
+    if(l_pSQUELETTE)
+    {
+        l_pSQUELETTE->Release();
+        delete l_pSQUELETTE;
+    }
+}
 void LWCMODEL::PrepareSquelette(void)
 {
 	l_pSQUELETTE->pRenderOs=new LPSKELETON_BONE[l_pSQUELETTE->dwNbrOs];
