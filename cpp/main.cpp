@@ -430,9 +430,8 @@ DWORD WINAPI MyThreadFunction( LPVOID lpParam )
     VkRenderPass renderPass;
 
 	//MEMORY--------------------------------------------------------------------
-	
-	
 
+	
 	//IMGUI---------------------------------------------------------------------
 #ifdef USE_IMGUI_PLEASE_IFYOUCAN
 	VkDescriptorPool imgui_pDescriptorPool;
@@ -440,6 +439,7 @@ DWORD WINAPI MyThreadFunction( LPVOID lpParam )
 #endif
 	
 #include"sn_interface.hpp"
+#include"sn_utils.hpp"
 #include"sn_wulkan.hpp"
 #include"sn_buffer.hpp"
 #include"sn_pipeline.hpp"

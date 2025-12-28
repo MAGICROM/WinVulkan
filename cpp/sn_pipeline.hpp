@@ -37,28 +37,23 @@ struct Vertex
 		return info;
 	}
 };
-VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features,VkPhysicalDevice physicalDevice) {
-        for (VkFormat format : candidates) {
-            VkFormatProperties props;
-            vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
-
-            if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) {
-                return format;
-            } else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) {
-                return format;
-            }
-        }
-
-        throw std::runtime_error("failed to find supported format!");
-    }
-VkFormat findDepthFormat(VkPhysicalDevice physicalDevice) {
-        return findSupportedFormat(
-        {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
-            VK_IMAGE_TILING_OPTIMAL,
-            VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT,
-            physicalDevice
-        );
-    }
+struct UBOVS{
+		glm::mat4 projection;
+		glm::mat4 view;
+		glm::vec4 lightPos = glm::vec4(0.0f, -5.0f, 0.0f, 1.0f);
+		float locSpeed = 0.0f;
+		float globSpeed = 0.0f;
+static VkDescriptorSetLayoutBinding BindLayout()
+	{
+	VkDescriptorSetLayoutBinding Binding;
+	Binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	Binding.binding = 0;
+	Binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	Binding.descriptorCount = 1;
+	Binding.pImmutableSamplers = nullptr;
+	return Binding;
+	}
+};
 extern unsigned char lunarg_ppm[];
 extern unsigned int lunarg_ppm_len;
 bool loadTexturelunarG(const char *filename, uint8_t *rgba_data, uint32_t *width, uint32_t *height) {
@@ -323,24 +318,6 @@ uint32_t Read_Obj(void** ppVertex,void** ppIndex)
 }
 //is a [] BY FRAMES
 #define SN_ARRAY_BY_FRAME
-struct UBOVS{
-		glm::mat4 projection;
-		glm::mat4 view;
-		glm::vec4 lightPos = glm::vec4(0.0f, -5.0f, 0.0f, 1.0f);
-		float locSpeed = 0.0f;
-		float globSpeed = 0.0f;
-static VkDescriptorSetLayoutBinding BindLayout()
-	{
-	VkDescriptorSetLayoutBinding Binding;
-	Binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	Binding.binding = 0;
-	Binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	Binding.descriptorCount = 1;
-	Binding.pImmutableSamplers = nullptr;
-	return Binding;
-	}
-};
-	
 struct snBinding
 {
 	VkDescriptorSetLayoutBinding	Binding;

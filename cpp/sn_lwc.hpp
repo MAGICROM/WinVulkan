@@ -28,7 +28,6 @@ typedef struct _COLORVALUE {
   float b;
   float a;
 } COLORVALUE;
-
 typedef struct _MATERIAL {
   COLORVALUE Diffuse;
   COLORVALUE Ambient;
@@ -36,7 +35,6 @@ typedef struct _MATERIAL {
   COLORVALUE Emissive;
   float Power;
 } MATERIAL;
-
 struct LWCMATERIAL
 {
     DWORD			dwStart;
@@ -46,14 +44,12 @@ struct LWCMATERIAL
 	BOOL			transparent;
 	BOOL			mirror;
 };
-
 typedef struct SKELETON_WEIGHT
 {
 	//Container des monstres et objets
 	DWORD			dwIndex;
 	float			fValue;
 }SKELETON_WEIGHT;
-
 //Bones
 struct LWCBONE
 {
@@ -64,7 +60,6 @@ struct LWCBONE
     glm::vec3 direction;
 	glm::vec3 up;
 };
-
 typedef struct SKELETON_BONE
 {
 	//Pointeur sur l' os parent
@@ -98,7 +93,6 @@ typedef struct SKELETON_BONE
 void RotationYawPitchRoll(float yaw,float pitch,float roll);
 }SKELETON_BONE;
 typedef struct SKELETON_BONE *LPSKELETON_BONE;
-
 void SKELETON_BONE::RotationYawPitchRoll(float yaw,float pitch,float roll)
 {
 
@@ -116,7 +110,6 @@ void SKELETON_BONE::RotationYawPitchRoll(float yaw,float pitch,float roll)
 	
     mSelfMatrice = mSelfRotation * mTransportRelatif;
 }
-
 typedef struct SKELETON_SQUELETTE
 {
 	uint8_t						cEtat;
@@ -140,10 +133,8 @@ typedef struct SKELETON_SQUELETTE
 
 }SKELETON_SQUELETTE;
 typedef struct SKELETON_SQUELETTE *LPSKELETON_SQUELETTE;
-
 #define IS_CORRUPTED	(0)
 #define IS_OK			(1)
-
 struct LWCMODEL
 {
     float	    fLowerPoint = 0.0f;
@@ -166,7 +157,6 @@ struct LWCMODEL
               if(pLayers)delete[]pLayers;
 			  }
 };
-
 void LWCMODEL::Release(void)
 {
     Vertices.Release();
@@ -231,7 +221,6 @@ void LWCMODEL::PrepareSquelette(void)
 
 	l_pSQUELETTE->cEtat=IS_OK;
 }
-
 #define READ_ON(_type_) *((_type_*)(data+pif));pif+=sizeof(_type_)
 uint32_t readLwcFile(const char* filename,LWCMODEL** ppModel){
     std::vector<char> file = readFile(filename);

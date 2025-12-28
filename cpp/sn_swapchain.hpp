@@ -152,7 +152,6 @@ struct snCamera
 		return World;
 	}
 }camera;
-
 struct snSwapChain
 {
 	VkExtent2D window_size;
