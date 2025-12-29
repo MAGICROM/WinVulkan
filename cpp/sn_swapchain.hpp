@@ -15,7 +15,7 @@ struct snCamera
 	float z_near = 0.1f;
 	float z_far = 50.0f;
 
-	float m_yaw = glm::pi<float>() * 1;
+	float m_yaw = glm::pi<float>() * 0;
 	float m_pitch = glm::pi<float>() * 0;
 	float m_limitpitch = glm::pi<float>()*0.5f-0.0001f;
 
@@ -109,7 +109,7 @@ struct snCamera
 	void Orientation2(float yaw = .0f,float pitch =.0f,float roll=.0f)
 	{
 		m_yaw -= yaw * 2.f;
-		m_pitch -= pitch * 2.f;
+		m_pitch += pitch * 2.f;
 
 		if(m_pitch > m_limitpitch)
 		m_pitch = m_limitpitch;
@@ -196,14 +196,12 @@ void LoadAssets()
 			snBuffer fontaine;
 			fontaine.CreateVertexBuffer(pModel->dwNumVertex*sizeof(Vertex));
 			fontaine.CopyFrom(pModel->Vertices);
-			
-			models.push_back(fontaine);
 			models_nv.push_back(pModel->dwNumVertex);
 			delete pModel;
+
+			models.push_back(fontaine);
 		}
-		
-		
-		
+
 		Vertex* pVertex;
 		uint32_t num_vertex = Read_Obj((void**)&pVertex,nullptr);
 		if(pVertex)
@@ -964,9 +962,8 @@ void LightUp()
 		Pipelines_create(); // III
 	
 		SWAPCHAIN_Resize(); 
-		camera.v3_position = glm::vec3(0,-1.f,0);
-		camera.v3_up = glm::vec3(0,0,1.f);
-		camera.v3_forward = glm::vec3(0,-1.f,0);
+		
+		camera.v3_position = glm::vec3(0,0.5f,0.5f);
 	}
 void LightDown()
 	{
@@ -994,14 +991,14 @@ void LightDown()
 		
 		vkDeviceWaitIdle(device);
 	}
-}ECRAN;
+}ecran;
 void EcranOn()
 {
-	ECRAN.LightUp();
+	ecran.LightUp();
 }
 void EcranOff()
 {
-	ECRAN.LightDown();
+	ecran.LightDown();
 	
 }
 static float f = 0.0f;
@@ -1018,7 +1015,7 @@ void sn_Updates(uint32_t imageIndex){
 		
 		Model = trans * project * glm::rotate(glm::mat4(1.0f), (float)horloge, glm::vec3(0, 0, 1.f));
 
-		memcpy(ECRAN.pipelines[0].Descriptor.bindings[0].buffers[imageIndex].mem_ptr,
+		memcpy(ecran.pipelines[0].Descriptor.bindings[0].buffers[imageIndex].mem_ptr,
 		glm::value_ptr(Model),sizeof(glm::mat4));
 
 		sn_interface.mdX * (float)sn_interface.delta_time;
@@ -1027,26 +1024,26 @@ void sn_Updates(uint32_t imageIndex){
 		camera.Orientation2((float)sn_interface.mdX * (float)sn_interface.delta_time,(float)-sn_interface.mdY * (float)sn_interface.delta_time,0.f);
 		sn_interface.mdX = 0;sn_interface.mdY = 0;
 		glm::mat4 WorldView = camera.LookAtFirstPerson();
-		ECRAN.uboVS.projection = 	camera.m4_projection;
-		ECRAN.uboVS.view = 			WorldView;
-		memcpy(ECRAN.pipelines[1].Descriptor.bindings[0].buffers[0].mem_ptr,
-			   &ECRAN.uboVS,
-			   ECRAN.pipelines[1].Descriptor.bindings[0].buffers[0].mem_size);
+		ecran.uboVS.projection = 	camera.m4_projection;
+		ecran.uboVS.view = 			WorldView;
+		memcpy(ecran.pipelines[1].Descriptor.bindings[0].buffers[0].mem_ptr,
+			   &ecran.uboVS,
+			   ecran.pipelines[1].Descriptor.bindings[0].buffers[0].mem_size);
 }
 void sn_Vulkandraw(){        
 
 	static uint32_t imageIndex = 0;
 	//vkWaitForFences(device, 1, &ECRAN.inFlightFence, VK_TRUE, UINT64_MAX);
 	err = vkAcquireNextImageKHR(device, 
-								ECRAN.swapChain, 
+								ecran.swapChain, 
 								UINT64_MAX, 
-								ECRAN.presentSema, 
+								ecran.presentSema, 
 								(VkFence)nullptr, 
 								&imageIndex);
 		if ((err == VK_ERROR_OUT_OF_DATE_KHR) || (err == VK_SUBOPTIMAL_KHR)) 
 		{
 			if (err == VK_ERROR_OUT_OF_DATE_KHR) {
-			ECRAN.SWAPCHAIN_Resize();
+			ecran.SWAPCHAIN_Resize();
 			}
 		return;
 		}
@@ -1119,7 +1116,7 @@ void sn_Vulkandraw(){
             ImGui::SameLine();
             ImGui::Text("counter = %d", counter);
 			ImGui::SameLine();
-            ImGui::Text("ECRAN.currentFrame = %d", ECRAN.currentFrame);
+            ImGui::Text("ECRAN.currentFrame = %d", ecran.currentFrame);
 			ImGui::SameLine();
             ImGui::Text("imageIndex = %d", imageIndex);
 
@@ -1143,12 +1140,12 @@ void sn_Vulkandraw(){
         // Rendering
         ImGui::Render();
 
-		vkResetCommandBuffer(ECRAN.imgui_commandBuffers[imageIndex],VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+		vkResetCommandBuffer(ecran.imgui_commandBuffers[imageIndex],VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
 		//err = vkResetCommandPool(device, ECRAN.commandPool, 0);
         VkCommandBufferBeginInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        err = vkBeginCommandBuffer(ECRAN.imgui_commandBuffers[imageIndex], &info);
+        err = vkBeginCommandBuffer(ecran.imgui_commandBuffers[imageIndex], &info);
       
     	VkClearValue clear_color = {};
 		VkClearValue* pClearColor = nullptr;
@@ -1158,7 +1155,7 @@ void sn_Vulkandraw(){
 		VkRenderingAttachmentInfo Depth = {};
 		Color.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
 		Depth.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-		Color.imageView = ECRAN.swapChainImageViews[imageIndex];
+		Color.imageView = ecran.swapChainImageViews[imageIndex];
 		Color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 		Color.resolveMode = VK_RESOLVE_MODE_NONE;
 		Color.imageView = VK_NULL_HANDLE;
@@ -1195,8 +1192,8 @@ void sn_Vulkandraw(){
 		
 		VkRenderPassBeginInfo RPinfo = {};
 		RPinfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        RPinfo.renderPass = renderPass;
-        RPinfo.framebuffer = ECRAN.swapChainFramebuffers[imageIndex];
+        RPinfo.renderPass = ecran.renderPass;
+        RPinfo.framebuffer = ecran.swapChainFramebuffers[imageIndex];
         RPinfo.renderArea.extent.width = sn_interface.destWidth;
         RPinfo.renderArea.extent.height = sn_interface.destHeight;
         RPinfo.clearValueCount = 1;
@@ -1204,7 +1201,7 @@ void sn_Vulkandraw(){
 		//vkCmdBeginRenderPass(ECRAN.imgui_commandBuffers[imageIndex], &RPinfo, VK_SUBPASS_CONTENTS_INLINE);
 	    //vkCmdBeginRendering(ECRAN.imgui_commandBuffers[imageIndex],&RenderingInfo);
 		ImDrawData* draw_data = ImGui::GetDrawData();
-		ImGui_ImplVulkan_RenderDrawData(draw_data, ECRAN.imgui_commandBuffers[imageIndex],VK_NULL_HANDLE);
+		ImGui_ImplVulkan_RenderDrawData(draw_data, ecran.imgui_commandBuffers[imageIndex],VK_NULL_HANDLE);
 		//vkCmdEndRendering(ECRAN.imgui_commandBuffers[imageIndex]);
 		
   		/*ECRAN.SWAPCHAIN_MemoryBarrier(ECRAN.imgui_commandBuffers[imageIndex],
@@ -1215,14 +1212,14 @@ void sn_Vulkandraw(){
 		//Submit command buffer
 		//vkCmdEndRenderPass(ECRAN.imgui_commandBuffers[imageIndex]);
 		
-		err = vkEndCommandBuffer(ECRAN.imgui_commandBuffers[imageIndex]);
+		err = vkEndCommandBuffer(ecran.imgui_commandBuffers[imageIndex]);
 
 		if(err != VK_SUCCESS)
 		{
 			
 			if(err == VK_ERROR_OUT_OF_HOST_MEMORY)throw std::runtime_error("Marche pas le vkEndCommandBuffer de Imgui!");
 		}
-	VkCommandBuffer batch[2] = {ECRAN.commandBuffers[imageIndex],ECRAN.imgui_commandBuffers[imageIndex]};
+	VkCommandBuffer batch[2] = {ecran.commandBuffers[imageIndex],ecran.imgui_commandBuffers[imageIndex]};
 	#else
 	VkCommandBuffer batch[1] = {ECRAN.commandBuffers[imageIndex]};
     #endif
@@ -1233,9 +1230,9 @@ void sn_Vulkandraw(){
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = &ECRAN.presentSema;
+	submitInfo.pWaitSemaphores = &ecran.presentSema;
 	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = &ECRAN.renderSema[imageIndex];
+	submitInfo.pSignalSemaphores = &ecran.renderSema[imageIndex];
 
 	submitInfo.pWaitDstStageMask = waitStages;
 	#ifdef USE_IMGUI_PLEASE_IFYOUCAN
@@ -1260,9 +1257,9 @@ void sn_Vulkandraw(){
 		VkPresentInfoKHR presentInfo{};
 		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 		presentInfo.waitSemaphoreCount = 1;
-		presentInfo.pWaitSemaphores = &ECRAN.renderSema[imageIndex];
+		presentInfo.pWaitSemaphores = &ecran.renderSema[imageIndex];
 		presentInfo.swapchainCount = 1;
-		presentInfo.pSwapchains = &ECRAN.swapChain;
+		presentInfo.pSwapchains = &ecran.swapChain;
 		presentInfo.pImageIndices = &imageIndex;
 
 		err = vkQueuePresentKHR(presentQueue, &presentInfo);
@@ -1272,7 +1269,7 @@ void sn_Vulkandraw(){
 		if (err == VK_ERROR_OUT_OF_DATE_KHR || err == VK_SUBOPTIMAL_KHR) {
           
             sn_interface.resizing = false;
-			ECRAN.SWAPCHAIN_Resize();
+			ecran.SWAPCHAIN_Resize();
 			if (err == VK_ERROR_OUT_OF_DATE_KHR) {
 				return;
 			}
@@ -1280,7 +1277,7 @@ void sn_Vulkandraw(){
             throw std::runtime_error("failed to present swap chain image!");
         }
 		vkQueueWaitIdle(presentQueue);
-        ECRAN.currentFrame = (ECRAN.currentFrame + 1) % swap_imageCount;
+        ecran.currentFrame = (ecran.currentFrame + 1) % swap_imageCount;
 			
 }
 

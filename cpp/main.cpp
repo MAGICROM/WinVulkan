@@ -21,7 +21,7 @@ bool Keyboard(RAWINPUT* raw, long timestamp);
 //uncomment USE_THREAD if you want wulkan on another thread
 //#define USE_THREAD
 //uncomment USE_IMGUI_PLEASE_IFYOUCAN if you want imgui
-//#define USE_IMGUI_PLEASE_IFYOUCAN
+#define USE_IMGUI_PLEASE_IFYOUCAN
 
 //***********************************************************************************************************************************************************************
 //define USE_IMGUI_PLEASE_IFYOUCAN if you want imgui
@@ -402,10 +402,12 @@ DWORD WINAPI MyThreadFunction( LPVOID lpParam )
 //    ###    #   #   #   #    ###   ###
 
 	//RUNNING INFLIGHT
+	
 	uint32_t swap_imageCount;
 	VkResult err;
 	
 	//PCIe
+	
 	uint32_t graphicsFamily{0};
 	uint32_t presentFamily{0};
 	uint32_t transferFamily{0};
@@ -413,22 +415,25 @@ DWORD WINAPI MyThreadFunction( LPVOID lpParam )
     VkQueue presentQueue;
 	VkQueue transferQueue;
 	
-    //VULKAN API----------------------------------------------------------------
-    VkInstance instance;
-
+	//VULKAN API----------------------------------------------------------------
+    
+	VkInstance instance;
+	
 	//SCREEN--------------------------------------------------------------------
-    VkSurfaceKHR surface;
-
+    
+	VkSurfaceKHR surface;
+	
 	//GPU-----------------------------------------------------------------------
-    VkPhysicalDevice carte_graphique = VK_NULL_HANDLE;
+    
+	VkPhysicalDevice carte_graphique = VK_NULL_HANDLE;
     VkSurfaceCapabilitiesKHR capabilities;
     std::vector<VkSurfaceFormatKHR> formats;
     std::vector<VkPresentModeKHR> presentModes;
 	
 	//DRIVER VULKAN-------------------------------------------------------------
-    VkDevice device;
-   
-
+    
+	VkDevice device;
+   	
 	//MEMORY--------------------------------------------------------------------
 
 	
