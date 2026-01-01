@@ -177,11 +177,10 @@ struct snSwapChain
 	VkCommandBuffer SN_ARRAY_BY_FRAME 		*commandBuffers = nullptr; 		
 	VkCommandBuffer SN_ARRAY_BY_FRAME 		*imgui_commandBuffers = nullptr; 
 	
-	std::vector<snBuffer> models;
-	std::vector<uint32_t> models_nv; 				 				
+	std::vector<LWCMODEL> models;	 				
 	
 	//SYNCHRO
-	VkSemaphore* renderSema{VK_NULL_HANDLE};
+	VkSemaphore* SN_ARRAY_BY_FRAME renderSema{VK_NULL_HANDLE};
     VkSemaphore presentSema{VK_NULL_HANDLE};
     VkFence inFlightFence{VK_NULL_HANDLE};
 		
@@ -189,17 +188,24 @@ struct snSwapChain
 
 void LoadAssets()
 	{
-		LWCMODEL* pModel;
-		uint32_t num_vertices = readLwcFile("assets/objets/fontaine.lwc",&pModel);
+		LWCMODEL* pModel = nullptr;
+		uint32_t num_vertices = readLwcFile("assets/objets/monsters/ikmommy_low90.lwc",&pModel);
 		if(pModel)
 		{
-			snBuffer fontaine;
-			fontaine.CreateVertexBuffer(pModel->dwNumVertex*sizeof(Vertex));
-			fontaine.CopyFrom(pModel->Vertices);
-			models_nv.push_back(pModel->dwNumVertex);
-			delete pModel;
-
-			models.push_back(fontaine);
+			snBuffer vertex;
+			vertex.CreateVertexBuffer(pModel->Vertices.mem_size);
+			vertex.CopyFrom(pModel->Vertices);
+			pModel->Vertices.Release();
+			pModel->Vertices = vertex;
+			if(pModel->Indexes.vkbuffer)
+				{
+				snBuffer index;
+				index.CreateIndexBuffer(pModel->Indexes.mem_size);	
+				index.CopyFrom(pModel->Indexes);
+				pModel->Indexes.Release();
+				pModel->Indexes = index;
+				}
+			models.push_back(*pModel);
 		}
 
 		Vertex* pVertex;
@@ -209,13 +215,14 @@ void LoadAssets()
 			snBuffer stage;
 			stage.CreateTransferBuffer((void*)pVertex,
 										num_vertex*sizeof(Vertex));
-			snBuffer suzanne;
-			suzanne.CreateVertexBuffer(num_vertex*sizeof(Vertex));
-			suzanne.CopyFrom(stage);
+			
+			LWCMODEL* pModel2 = new LWCMODEL;
+			pModel2->Vertices.CreateVertexBuffer(num_vertex*sizeof(Vertex));
+			pModel2->Vertices.CopyFrom(stage);
+			pModel2->dwNumVertex = num_vertex;
 			stage.Release();
 			delete [] pVertex;
-			models.push_back(suzanne);
-			models_nv.push_back(num_vertex);
+			models.push_back(*pModel2);
 		}
 	}
 
@@ -223,11 +230,11 @@ void Pipelines_create()
 	{
 	snPipeline pm;
 	
-	pm.PipeModel_Clear();
-	pm.PipeModel_Prepare();
-	pm.PipeModel_CreateShaders(2);
-	pm.PipeModel_LoadShader(0,"shaders/vert.spv","main",VK_SHADER_STAGE_VERTEX_BIT);
-	pm.PipeModel_LoadShader(1,"shaders/frag.spv","main",VK_SHADER_STAGE_FRAGMENT_BIT);
+	pm.Reset();
+	pm.Prepare();
+	pm.ReserveShaders(2);
+	pm.LoadShader(0,"shaders/vert.spv","main",VK_SHADER_STAGE_VERTEX_BIT);
+	pm.LoadShader(1,"shaders/frag.spv","main",VK_SHADER_STAGE_FRAGMENT_BIT);
 
 	snBinding bind{};
 	bind.Binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -256,34 +263,37 @@ void Pipelines_create()
 
 	uint32_t tex_width;
 	uint32_t tex_height;
+	
 	loadTexturelunarG("pipo", NULL, &tex_width, &tex_height);
 	uint8_t* data = new uint8_t[tex_width*tex_height*4];
 	loadTexturelunarG("pipo", data, &tex_width, &tex_height);
 	
-	bind.buffers[0].CreateTextureFrom(
+	/*bind.buffers[0].CreateTextureFrom(
 		tex_width,
 		tex_height,
 		data,
-		tex_width*tex_height*sizeof(uint32_t));
+		tex_width*tex_height*sizeof(uint32_t));*/
+
+		bind.buffers[0].CreateTexture("assets/textures/tex_mur3.bmp");
 
 	pm.Descriptor.bindings.push_back(bind);
 	pm.GfxPipelineInfo.subpass = 1;
 	pm.Descriptor.DescriptorsCreate();
-	pm.PipeModel_Create(renderPass);
+	pm.Create(renderPass);
 	
 	pipelines.push_back(pm);
 
 	//Second pipeline***********************************************************************************************************************
 
 	snPipeline pm2;
-	pm2.PipeModel_Clear();
-	pm2.PipeModel_Prepare();
-	pm2.PipeModel_CreateShaders(2);
-	pm2.PipeModel_LoadShader(0,"shaders/instancing.vert.spv","main",VK_SHADER_STAGE_VERTEX_BIT);
-	pm2.PipeModel_LoadShader(1,"shaders/instancing.frag.spv","main",VK_SHADER_STAGE_FRAGMENT_BIT);
+	pm2.Reset();
+	pm2.Prepare();
+	pm2.ReserveShaders(2);
+	pm2.LoadShader(0,"shaders/instancing.vert.spv","main",VK_SHADER_STAGE_VERTEX_BIT);
+	pm2.LoadShader(1,"shaders/instancing.frag.spv","main",VK_SHADER_STAGE_FRAGMENT_BIT);
 	pm2.vertexInputInfo = Vertex::VertexInputState();
 
-	bind.Binding = UBOVS::BindLayout();
+	bind.Binding = UBOVS::BindLayout(0);
 	bind.count = 1;
 	bind.buffers = new snBuffer;
 	bind.buffers->CreateUniformBuffer(&uboVS,sizeof(UBOVS));
@@ -303,7 +313,7 @@ void Pipelines_create()
 	Dinfo.back.compareOp = VK_COMPARE_OP_ALWAYS;
 	pm2.GfxPipelineInfo.pDepthStencilState = &Dinfo;
 	
-	pm2.PipeModel_Create(renderPass);
+	pm2.Create(renderPass);
 	pipelines.push_back(pm2);
 	}
 
@@ -311,7 +321,7 @@ void Pipelines_destroy()
     {
 		for(volatile int c=0;c<pipelines.size();c++)
 		{
-			pipelines[c].PipeModel_Release();
+			pipelines[c].Release();
 		}
 		pipelines.clear();
     }
@@ -442,14 +452,10 @@ void commandbuffers_create()
 		vkCmdBindDescriptorSets(commandBuffers[i], 
 								VK_PIPELINE_BIND_POINT_GRAPHICS, 
 								pipelines[1].PipeLayout, 0, 1, &pipelines[1].Descriptor.descriptorsets[i], 0, nullptr);
-		VkDeviceSize offsets[] = {0};
-		vkCmdBindVertexBuffers(commandBuffers[i],0,1,&models[0].vkbuffer,offsets);
-		//vkCmdDrawIndirect(commandBuffers[i],models[0].vkbuffer,0,num_vertex,sizeof(Vertex));
-		vkCmdDraw(commandBuffers[i], models_nv[0], 1, 0, 0);//num_vertex
 		
-		
-		
-		
+		models[0].Draw(commandBuffers[i]);
+		models[1].Draw(commandBuffers[i]);
+				
 		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[0].Pipe);
 		vkCmdNextSubpass(commandBuffers[i],VK_SUBPASS_CONTENTS_INLINE);
 		vkCmdBindDescriptorSets(commandBuffers[i], 
@@ -503,6 +509,7 @@ void commandbuffers_destroy()
 //-------------------------------------------------------------------------------------------------------------------------------		
 //-------------------------------------------------------------------------------------------------------------------------------		
 //-------------------------------------------------------------------------------------------------------------------------------	
+
 void DepthStencil_Create()
 {
 	VkFormat depthFormat = findDepthFormat(carte_graphique);
@@ -973,7 +980,7 @@ void LightDown()
 		{
 			model.Release();
 		}
-		
+		models.clear();
 		SyncObjects_Destroy();
 		SWAPCHAIN_Destroy();
 		commandbuffers_destroy();
@@ -1030,6 +1037,149 @@ void sn_Updates(uint32_t imageIndex){
 			   &ecran.uboVS,
 			   ecran.pipelines[1].Descriptor.bindings[0].buffers[0].mem_size);
 }
+inline void sn_VulkandrawOverlay(uint32_t iIndex = 0)
+{     
+	#ifdef USE_IMGUI_PLEASE_IFYOUCAN
+	ImGuiIO& io = ImGui::GetIO();
+
+	// Start the Dear ImGui frame
+	ImGui_ImplVulkan_NewFrame();
+	ImGui_ImplWin32_NewFrame();
+	ImGui::NewFrame();
+
+	// 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
+	if (show_demo_window)
+		ImGui::ShowDemoWindow(&show_demo_window);
+
+	// 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
+	{
+		static int counter = 0;
+
+		io.MouseDrawCursor = true;
+
+		ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
+
+		ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
+		ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
+		ImGui::Checkbox("Another Window", &show_another_window);
+
+		static float clr_color[3] = {0.1f,0.6f,0.8f};
+		ImGui::SliderFloat("Rotation", &f, 0.0f, 10.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+		ImGui::ColorEdit3("clear color", (float*)&clr_color); // Edit 3 floats representing a color
+		ImGui::Text("EYE : X %f Y %f Z %f", camera.v3_position.x, camera.v3_position.y, camera.v3_position.z);
+		ImGui::Text("FRONT : X %f Y %f Z %f", camera.v3_forward.x, camera.v3_forward.y, camera.v3_forward.z);
+		ImGui::Text("Focale : X %f mm",camera.focale);
+		
+		
+		
+		if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
+			counter++;
+		ImGui::SameLine();
+		ImGui::Text("counter = %d", counter);
+		ImGui::SameLine();
+		ImGui::Text("ECRAN.currentFrame = %d", ecran.currentFrame);
+
+		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+		static quat qrot1 = quat(1.0f,0.f,0.f,0.f);
+		//ImGui::gizmo3D("##gizmo1",qrot1,200.f);
+
+		ImGui::End();
+	}
+
+	// 3. Show another simple window.
+	if (show_another_window)
+	{
+		ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+		ImGui::Text("Hello from another window!");
+		if (ImGui::Button("Close Me"))
+			show_another_window = false;
+		ImGui::End();
+	}
+
+	// Rendering
+	ImGui::Render();
+
+	vkResetCommandBuffer(ecran.imgui_commandBuffers[iIndex],VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+	//err = vkResetCommandPool(device, ECRAN.commandPool, 0);
+	VkCommandBufferBeginInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	err = vkBeginCommandBuffer(ecran.imgui_commandBuffers[iIndex], &info);
+
+	VkClearValue clear_color = {};
+	VkClearValue* pClearColor = nullptr;
+	VkClearValue* pDepthValue = nullptr;
+
+	VkRenderingAttachmentInfoKHR Color = {};
+	VkRenderingAttachmentInfo Depth = {};
+	Color.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+	Depth.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+	Color.imageView = ecran.swapChainImageViews[iIndex];
+	Color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	Color.resolveMode = VK_RESOLVE_MODE_NONE;
+	Color.imageView = VK_NULL_HANDLE;
+	Color.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	Color.loadOp = pClearColor ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+	Color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+	if(pClearColor)
+	{
+		Color.clearValue = *pClearColor;
+	}
+
+	Depth.imageView = VK_NULL_HANDLE;
+	Depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	Depth.resolveMode = VK_RESOLVE_MODE_NONE;
+	Depth.resolveImageView = VK_NULL_HANDLE;
+	Depth.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	Depth.loadOp = pDepthValue ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+	Depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+	if(pDepthValue)
+	{
+		Depth.clearValue = *pDepthValue;
+	}
+
+	VkRenderingInfoKHR RenderingInfo = {};
+	RenderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+	RenderingInfo.renderArea = {{0,0},{sn_interface.destWidth,sn_interface.destHeight}};
+	RenderingInfo.layerCount = 0;
+	RenderingInfo.viewMask = 0;
+	RenderingInfo.colorAttachmentCount = 1;
+	RenderingInfo.pColorAttachments = &Color;
+	RenderingInfo.pDepthAttachment = &Depth;
+
+	VkRenderPassBeginInfo RPinfo = {};
+	RPinfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	RPinfo.renderPass = ecran.renderPass;
+	RPinfo.framebuffer = ecran.swapChainFramebuffers[iIndex];
+	RPinfo.renderArea.extent.width = sn_interface.destWidth;
+	RPinfo.renderArea.extent.height = sn_interface.destHeight;
+	RPinfo.clearValueCount = 1;
+	RPinfo.pClearValues = &clear_color;
+	//vkCmdBeginRenderPass(ECRAN.imgui_commandBuffers[imageIndex], &RPinfo, VK_SUBPASS_CONTENTS_INLINE);
+	//vkCmdBeginRendering(ECRAN.imgui_commandBuffers[imageIndex],&RenderingInfo);
+	ImDrawData* draw_data = ImGui::GetDrawData();
+	ImGui_ImplVulkan_RenderDrawData(draw_data, ecran.imgui_commandBuffers[iIndex],VK_NULL_HANDLE);
+	//vkCmdEndRendering(ECRAN.imgui_commandBuffers[imageIndex]);
+
+	/*ECRAN.SWAPCHAIN_MemoryBarrier(ECRAN.imgui_commandBuffers[imageIndex],
+								ECRAN.swapChainImages[imageIndex],
+								VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+								VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);*/
+
+	//Submit command buffer
+	//vkCmdEndRenderPass(ECRAN.imgui_commandBuffers[imageIndex]);
+
+	err = vkEndCommandBuffer(ecran.imgui_commandBuffers[iIndex]);
+
+	if(err != VK_SUCCESS)
+	{
+		
+		if(err == VK_ERROR_OUT_OF_HOST_MEMORY)throw std::runtime_error("Marche pas le vkEndCommandBuffer de Imgui!");
+	}
+	#endif
+}   
 void sn_Vulkandraw(){        
 
 	static uint32_t imageIndex = 0;
@@ -1077,148 +1227,8 @@ void sn_Vulkandraw(){
 		//vkQueueSubmit
 		//vkQueuePresentKHR
 
-	
-#ifdef USE_IMGUI_PLEASE_IFYOUCAN
-		ImGuiIO& io = ImGui::GetIO();
-		
-		// Start the Dear ImGui frame
-        ImGui_ImplVulkan_NewFrame();
-		ImGui_ImplWin32_NewFrame();
-		ImGui::NewFrame();
-		
-        // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-        if (show_demo_window)
-            ImGui::ShowDemoWindow(&show_demo_window);
-
-        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
-        {
-           static int counter = 0;
-
-			io.MouseDrawCursor = true;
-
-            ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
-
-            ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-            ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-            ImGui::Checkbox("Another Window", &show_another_window);
-
-			static float clr_color[3] = {0.1f,0.6f,0.8f};
-            ImGui::SliderFloat("Rotation", &f, 0.0f, 10.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-            ImGui::ColorEdit3("clear color", (float*)&clr_color); // Edit 3 floats representing a color
-     		ImGui::Text("EYE : X %f Y %f Z %f", camera.v3_position.x, camera.v3_position.y, camera.v3_position.z);
-			ImGui::Text("FRONT : X %f Y %f Z %f", camera.v3_forward.x, camera.v3_forward.y, camera.v3_forward.z);
-			ImGui::Text("Focale : X %f mm",camera.focale);
-            
-			
-			
-			if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-                counter++;
-            ImGui::SameLine();
-            ImGui::Text("counter = %d", counter);
-			ImGui::SameLine();
-            ImGui::Text("ECRAN.currentFrame = %d", ecran.currentFrame);
-			ImGui::SameLine();
-            ImGui::Text("imageIndex = %d", imageIndex);
-
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-			static quat qrot1 = quat(1.0f,0.f,0.f,0.f);
-			//ImGui::gizmo3D("##gizmo1",qrot1,200.f);
-
-            ImGui::End();
-        }
-
-        // 3. Show another simple window.
-        if (show_another_window)
-        {
-            ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-            ImGui::Text("Hello from another window!");
-            if (ImGui::Button("Close Me"))
-                show_another_window = false;
-            ImGui::End();
-        }
-
-        // Rendering
-        ImGui::Render();
-
-		vkResetCommandBuffer(ecran.imgui_commandBuffers[imageIndex],VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
-		//err = vkResetCommandPool(device, ECRAN.commandPool, 0);
-        VkCommandBufferBeginInfo info = {};
-        info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        err = vkBeginCommandBuffer(ecran.imgui_commandBuffers[imageIndex], &info);
-      
-    	VkClearValue clear_color = {};
-		VkClearValue* pClearColor = nullptr;
-		VkClearValue* pDepthValue = nullptr;
-
-		VkRenderingAttachmentInfoKHR Color = {};
-		VkRenderingAttachmentInfo Depth = {};
-		Color.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-		Depth.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-		Color.imageView = ecran.swapChainImageViews[imageIndex];
-		Color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-		Color.resolveMode = VK_RESOLVE_MODE_NONE;
-		Color.imageView = VK_NULL_HANDLE;
-		Color.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		Color.loadOp = pClearColor ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
-		Color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-		if(pClearColor)
-		{
-			Color.clearValue = *pClearColor;
-		}
-		
-		Depth.imageView = VK_NULL_HANDLE;
-		Depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-		Depth.resolveMode = VK_RESOLVE_MODE_NONE;
-		Depth.resolveImageView = VK_NULL_HANDLE;
-		Depth.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		Depth.loadOp = pDepthValue ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
-		Depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-		if(pDepthValue)
-		{
-			Depth.clearValue = *pDepthValue;
-		}
-		
-		VkRenderingInfoKHR RenderingInfo = {};
-		RenderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
-		RenderingInfo.renderArea = {{0,0},{sn_interface.destWidth,sn_interface.destHeight}};
-		RenderingInfo.layerCount = 0;
-		RenderingInfo.viewMask = 0;
-		RenderingInfo.colorAttachmentCount = 1;
-		RenderingInfo.pColorAttachments = &Color;
-		RenderingInfo.pDepthAttachment = &Depth;
-		
-		VkRenderPassBeginInfo RPinfo = {};
-		RPinfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        RPinfo.renderPass = ecran.renderPass;
-        RPinfo.framebuffer = ecran.swapChainFramebuffers[imageIndex];
-        RPinfo.renderArea.extent.width = sn_interface.destWidth;
-        RPinfo.renderArea.extent.height = sn_interface.destHeight;
-        RPinfo.clearValueCount = 1;
-        RPinfo.pClearValues = &clear_color;
-		//vkCmdBeginRenderPass(ECRAN.imgui_commandBuffers[imageIndex], &RPinfo, VK_SUBPASS_CONTENTS_INLINE);
-	    //vkCmdBeginRendering(ECRAN.imgui_commandBuffers[imageIndex],&RenderingInfo);
-		ImDrawData* draw_data = ImGui::GetDrawData();
-		ImGui_ImplVulkan_RenderDrawData(draw_data, ecran.imgui_commandBuffers[imageIndex],VK_NULL_HANDLE);
-		//vkCmdEndRendering(ECRAN.imgui_commandBuffers[imageIndex]);
-		
-  		/*ECRAN.SWAPCHAIN_MemoryBarrier(ECRAN.imgui_commandBuffers[imageIndex],
-									ECRAN.swapChainImages[imageIndex],
-									VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-									VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);*/
-		
-		//Submit command buffer
-		//vkCmdEndRenderPass(ECRAN.imgui_commandBuffers[imageIndex]);
-		
-		err = vkEndCommandBuffer(ecran.imgui_commandBuffers[imageIndex]);
-
-		if(err != VK_SUCCESS)
-		{
-			
-			if(err == VK_ERROR_OUT_OF_HOST_MEMORY)throw std::runtime_error("Marche pas le vkEndCommandBuffer de Imgui!");
-		}
+	#ifdef USE_IMGUI_PLEASE_IFYOUCAN
+	sn_VulkandrawOverlay(imageIndex);
 	VkCommandBuffer batch[2] = {ecran.commandBuffers[imageIndex],ecran.imgui_commandBuffers[imageIndex]};
 	#else
 	VkCommandBuffer batch[1] = {ECRAN.commandBuffers[imageIndex]};
@@ -1263,9 +1273,6 @@ void sn_Vulkandraw(){
 		presentInfo.pImageIndices = &imageIndex;
 
 		err = vkQueuePresentKHR(presentQueue, &presentInfo);
-
-       
-		
 		if (err == VK_ERROR_OUT_OF_DATE_KHR || err == VK_SUBOPTIMAL_KHR) {
           
             sn_interface.resizing = false;

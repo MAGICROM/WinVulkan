@@ -116,6 +116,9 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
     std::vector<VkPhysicalDevice> devices(deviceCount);
     vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
 	
+	
+	std::vector<uint32_t> transfert_family;
+	
 	//Teste tous les gpus
 	for (const VkPhysicalDevice& tested_device : devices) 
 	{
@@ -142,11 +145,13 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
 				!(queueFamilies[n_family].queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
 				!(queueFamilies[n_family].queueFlags & VK_QUEUE_COMPUTE_BIT)) 
 				{
-					transferFamily = n_family;
+					transfert_family.push_back(n_family);
 				}
 			}
 	}
 	
+	transferFamily = transfert_family[0];
+
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
     std::set<uint32_t> uniqueQueueFamilies = {graphicsFamily, presentFamily, transferFamily};
 
@@ -320,8 +325,6 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
         ImGui_ImplWin32_Init(hwnd);
 		ImGui_ImplVulkan_Init(&dearimgui);
 		#endif
-		
-		
 		EcranOn();
 }
 void sn_Vulkandestroy()
@@ -336,8 +339,6 @@ void sn_Vulkandestroy()
 
     EcranOff();
 	
-	
-		
 	//Close Device and all
 	vkDestroyDevice(device,NULL);
     vkDestroySurfaceKHR(instance,surface,NULL);

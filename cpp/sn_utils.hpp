@@ -404,3 +404,5 @@ uint32_t Read_Obj(void** ppVertex,void** ppIndex)
 	//Tout a été lu
 	return 0;
 }
+extern unsigned char* STBI_ReadImage(const char* filename,int* w, int* h, int* c);
+extern void STBI_FreeImage(unsigned char* img);

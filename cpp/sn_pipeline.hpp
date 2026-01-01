@@ -5,11 +5,11 @@ struct UBOVS{
 		glm::vec4 lightPos = glm::vec4(0.0f, -5.0f, 0.0f, 1.0f);
 		float locSpeed = 0.0f;
 		float globSpeed = 0.0f;
-static VkDescriptorSetLayoutBinding BindLayout()
+static VkDescriptorSetLayoutBinding BindLayout(uint32_t binding)
 	{
 	VkDescriptorSetLayoutBinding Binding;
 	Binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	Binding.binding = 0;
+	Binding.binding = binding;
 	Binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 	Binding.descriptorCount = 1;
 	Binding.pImmutableSamplers = nullptr;
@@ -161,10 +161,10 @@ struct snPipeline
 	VkPipelineLayoutCreateInfo                  pipelineLayoutInfo{};
 	VkGraphicsPipelineCreateInfo                GfxPipelineInfo{};
 	
-void PipeModel_Clear(){
+void Reset(){
 	memset(this,0,sizeof(snPipeline));
 }
-void PipeModel_LoadShader(int x,const std::string &filename,const char* fun,VkShaderStageFlagBits stage)
+void LoadShader(int x,const std::string &filename,const char* fun,VkShaderStageFlagBits stage)
 {
 	auto ShaderCode = readFile(filename);
 
@@ -181,7 +181,7 @@ void PipeModel_LoadShader(int x,const std::string &filename,const char* fun,VkSh
 	ShaderStageInfo[x].pName = fun;
 }
 	
-void PipeModel_CreateShaders(size_t numbers){
+void ReserveShaders(size_t numbers){
 			GfxPipelineInfo.stageCount = numbers;
 			ShaderStageInfo = new VkPipelineShaderStageCreateInfo[GfxPipelineInfo.stageCount];
 			Shaders = new VkShaderModuleCreateInfo[GfxPipelineInfo.stageCount];
@@ -203,7 +203,7 @@ void PipeModel_CreateShaders(size_t numbers){
         		ShaderStageInfo[i].module = nullptr;
 			}
 }
-void PipeModel_Prepare(){
+void Prepare(){
 		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 		inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 		viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -293,7 +293,7 @@ void PipeModel_Prepare(){
 			.basePipelineHandle = VK_NULL_HANDLE
 		};
 	}
-void PipeModel_Create(VkRenderPass rp){
+void Create(VkRenderPass rp){
 		
 		pipelineLayoutInfo.setLayoutCount = 1; //un par frame
 		pipelineLayoutInfo.pSetLayouts = &Descriptor.descriptorSetLayout; //<---- Ils servent ici un
@@ -343,7 +343,7 @@ void PipeModel_Create(VkRenderPass rp){
 		if(dynamicStates)delete [] dynamicStates;
 		if(bindings)delete [] bindings; 
 	};
-void PipeModel_Release(){
+void Release(){
 		Descriptor.DescriptorsDestroy();
 		vkDestroyPipeline(device, Pipe, nullptr);
         vkDestroyPipelineLayout(device, PipeLayout, nullptr);

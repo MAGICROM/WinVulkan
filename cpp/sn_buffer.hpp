@@ -21,7 +21,6 @@ static void TransfertCommandPool_Destroy()
 {	
 	vkDestroyCommandPool(device,transfercommandPool,NULL);
 }
-	
 	void Begin(VkCommandPool pool)
 	{
 		VkCommandBufferAllocateInfo allocInfo{};
@@ -37,7 +36,7 @@ static void TransfertCommandPool_Destroy()
         fenceInfo.flags = 0;
 		vkCreateFence(device, &fenceInfo, nullptr, &fence);
 	}
-	void End()
+void End()
 	{
 		vkWaitForFences(device, 1, &fence, VK_TRUE, 100000000000);
 		vkDestroyFence(device, fence, nullptr);
@@ -55,9 +54,8 @@ struct snTexture
 };
 struct snBuffer
 { 
-
 	alignas(16)
-//If is set the buffer is a texture
+//If is set the buffer is a texture and a sampler
 	snTexture* 		pTexture = nullptr;
 //Pointer set on a shared memory address
 	void* 			mem_ptr = nullptr;
@@ -194,7 +192,7 @@ void CopyFrom(snBuffer& buffer){
 	
 
 	}
-//Cree une texture 
+//Cree from data 
 void CreateTextureFrom(	uint32_t tex_width,uint32_t tex_height,void* data,uint32_t size)
 {
 	
@@ -212,7 +210,7 @@ void CreateTextureFrom(	uint32_t tex_width,uint32_t tex_height,void* data,uint32
     text_img.format = VK_FORMAT_R8G8B8A8_UNORM;
     text_img.extent = {tex_width, tex_height, 1};
     text_img.mipLevels = 1;
-    text_img.arrayLayers = 1;
+    text_img.arrayLayers = 1; //     
     text_img.samples = VK_SAMPLE_COUNT_1_BIT;
     text_img.tiling = VK_IMAGE_TILING_LINEAR;
     text_img.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -314,6 +312,34 @@ void CreateTextureFrom(	uint32_t tex_width,uint32_t tex_height,void* data,uint32
  
     err = vkCreateSampler(device,&smp_info,nullptr,&pTexture->sampler);
 	stage.Release();
+}
+//Cree une texture de fichier
+void CreateTexture(const char* filename)
+{
+	int tex_width,tex_height,tex_channels;
+	unsigned char* img= STBI_ReadImage(filename,&tex_width,&tex_height,&tex_channels);
+	if(img)
+	{
+		if(tex_channels == 3){
+		unsigned char* img4 = new uint8_t[tex_width*tex_height*4];
+		for(int x=0;x<tex_width * tex_height;x++)
+		{
+			img4[x*4] = img[x*3];
+			img4[x*4+1] = img[x*3+1];
+			img4[x*4+2] = img[x*3+2];
+			img4[x*4+3] = 255;
+		}
+		STBI_FreeImage(img);
+		CreateTextureFrom(tex_width,tex_height,img4,tex_width*tex_height*4);
+		delete [] img4;
+		return;
+		}
+		if(tex_channels == 4){
+		CreateTextureFrom(tex_width,tex_height,img,tex_width*tex_height*4);
+		STBI_FreeImage(img);
+		return;
+		}
+	}
 }
 void Lock( uint32_t where, uint32_t size, void* *lptr, uint32_t flags = 0)
 {

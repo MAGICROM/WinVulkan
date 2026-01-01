@@ -141,7 +141,7 @@ struct LWCMODEL
     int32_t		iModeltype = 0;
     int32_t		iNumLayer = 0;
 
-    LWCMATERIAL* pLayers;
+    LWCMATERIAL* pLayers = nullptr;
     snBuffer Vertices;
     snBuffer Indexes;
 
@@ -152,11 +152,28 @@ struct LWCMODEL
 
    void PrepareSquelette(void);
    void	Release(void);
+   void	Draw(VkCommandBuffer commandBuffer);
+  
    ~LWCMODEL(){
-			  Release();
-              if(pLayers)delete[]pLayers;
-			  }
+		if(pLayers)
+		delete[]pLayers;
+		pLayers = nullptr;
+		}
 };
+void LWCMODEL::Draw(VkCommandBuffer commandBuffer)
+{
+	VkDeviceSize offsets[] = {0};
+	
+	if(Indexes.mem_size)
+	{
+	vkCmdBindVertexBuffers(commandBuffer,0,1,&Vertices.vkbuffer,offsets);
+	vkCmdBindIndexBuffer(commandBuffer, Indexes.vkbuffer, 0, VK_INDEX_TYPE_UINT16);
+	vkCmdDrawIndexed(commandBuffer, dwNumVertex, 1, 0, 0, 0);
+	return;
+	}	
+	vkCmdBindVertexBuffers(commandBuffer,0,1,&Vertices.vkbuffer,offsets);
+	vkCmdDraw(commandBuffer, dwNumVertex, 1, 0, 0);//num_vertex
+}
 void LWCMODEL::Release(void)
 {
     Vertices.Release();
@@ -248,10 +265,10 @@ uint32_t readLwcFile(const char* filename,LWCMODEL** ppModel){
     chunk = READ_ON(uint32_t);
     if(chunk!=LWC_ID_LWCF && chunk!=LWC_ID_LWC2)return 0;
     //Layers////////////////////////////////////////////////////////////////
-    if(chunk==LWC_ID_LWC2)
+    (*ppModel) = new LWCMODEL;
+	 if(chunk==LWC_ID_LWC2)
     {
-        (*ppModel) = new LWCMODEL;
-        layers = READ_ON(uint32_t);
+       	layers = READ_ON(uint32_t);
         (*ppModel)->pLayers = new LWCMATERIAL[layers];
         for(uint32_t i=0;i<layers;i++)
         {
@@ -287,16 +304,17 @@ uint32_t readLwcFile(const char* filename,LWCMODEL** ppModel){
     }
     if(chunk==LWC_ID_INDX)
 	{
-        uint32_t indexes = READ_ON(uint32_t);
+        uint32_t indexes = chunk_size / sizeof(uint32_t);
         uint16_t* pIndexes = nullptr;
        
         (*ppModel)->Indexes.CreateTransferBuffer( nullptr , indexes*sizeof(uint16_t) );
         (*ppModel)->Indexes.Lock( 0, indexes*sizeof(uint16_t), (void**)&pIndexes, 0 );
         for(uint32_t dwN=0;dwN<indexes;dwN++)
         {
-            pIndexes[dwN] = READ_ON(uint16_t);
+            pIndexes[dwN] = (uint16_t)READ_ON(uint32_t);
         } 
         (*ppModel)->Indexes.UnLock();
+		(*ppModel)->dwNumVertex = indexes;
     }
     if(chunk==LWC_ID_BONE)
 	{
@@ -368,6 +386,11 @@ uint32_t readLwcFile(const char* filename,LWCMODEL** ppModel){
 			}
 		    (*ppModel)->PrepareSquelette();
         }
-    } while (pif < file.size());
+		if(chunk==LWC_ID_DATA)
+		{
+			pif+=chunk_size;
+		}
+		
+	    } while (pif < file.size());
     return vert_size; 
 }
