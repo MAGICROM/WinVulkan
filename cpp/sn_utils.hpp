@@ -11,7 +11,7 @@ uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
 
 	throw std::runtime_error("failed to find suitable memory type!");
 	}
-void CommandImgMemBarrier(VkCommandBuffer& buf,VkImage img,VkImageLayout de,VkImageLayout a)
+void CommandImgMemBarrier(VkCommandBuffer& buf,VkImage img,VkImageLayout de,VkImageLayout a,VkImageSubresourceRange* pS = nullptr)
 	{
 		VkImageMemoryBarrier memory_barrier = {};
 		memory_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -22,7 +22,10 @@ void CommandImgMemBarrier(VkCommandBuffer& buf,VkImage img,VkImageLayout de,VkIm
 		memory_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		memory_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		memory_barrier.image = img;//>>>>>>>>>>
-		memory_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+		if(pS)
+			memory_barrier.subresourceRange = *pS;
+		else	
+			memory_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
 		VkPipelineStageFlagBits Source{VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT};
 		VkPipelineStageFlagBits Destination{VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT};
@@ -52,7 +55,7 @@ void CommandImgMemBarrier(VkCommandBuffer& buf,VkImage img,VkImageLayout de,VkIm
 		if(de == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && a == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 		{
 			memory_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;//VK_ACCESS_TRANSFER_WRITE_BIT;
-			memory_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+			memory_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 			Source = VK_PIPELINE_STAGE_TRANSFER_BIT;
 			Destination = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 		}

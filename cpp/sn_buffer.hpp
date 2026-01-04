@@ -1,5 +1,4 @@
 VkCommandPool transfercommandPool{VK_NULL_HANDLE};
-VkCommandPool commandPool{VK_NULL_HANDLE};
 struct snCommand
 {
 
@@ -25,7 +24,7 @@ static void TransfertCommandPool_Destroy()
 	{
 		VkCommandBufferAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		allocInfo.commandPool = commandPool;
+		allocInfo.commandPool = pdevice->commandPool;
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		allocInfo.commandBufferCount = 1;
 				
@@ -40,7 +39,7 @@ void End()
 	{
 		vkWaitForFences(device, 1, &fence, VK_TRUE, 100000000000);
 		vkDestroyFence(device, fence, nullptr);
-		vkFreeCommandBuffers(device, commandPool, 1, &m_cmd);
+		vkFreeCommandBuffers(device, pdevice->commandPool, 1, &m_cmd);
 	}
 	operator VkCommandBuffer*(){return &m_cmd;};
 	operator VkCommandBuffer&(){return m_cmd;};
@@ -51,6 +50,37 @@ struct snTexture
 	VkImage image;
 	VkImageView imageview;
 	VkSampler sampler;
+};
+struct snTextureArray
+{
+VkBufferImageCopy* region = nullptr;
+uint32_t regionCount = 1;
+snTextureArray(int x)
+{
+	region = new VkBufferImageCopy[x];
+	regionCount = x;
+}
+~snTextureArray()
+{
+	delete [] region;
+}
+
+void Set(int i,int tex_width,int tex_height)
+{
+				region[i].bufferOffset = tex_width * tex_height * 4 * i;
+				region[i].bufferRowLength = 0;
+				region[i].bufferImageHeight = 0;
+				region[i].imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				region[i].imageSubresource.layerCount = 1;
+				region[i].imageSubresource.mipLevel = 0;
+				region[i].imageSubresource.baseArrayLayer = i;
+				region[i].imageExtent.width = tex_width;
+				region[i].imageExtent.height = tex_height;
+				region[i].imageExtent.depth = 1;
+				region[i].imageOffset.x = 
+				region[i].imageOffset.y = 
+				region[i].imageOffset.z = 0;
+}
 };
 struct snBuffer
 { 
@@ -192,8 +222,13 @@ void CopyFrom(snBuffer& buffer){
 	
 
 	}
+//Cree une copie de texture
+void CreateTextureInstance(snBuffer& model)
+{
+	pTexture=model.pTexture;
+}
 //Cree from data 
-void CreateTextureFrom(	uint32_t tex_width,uint32_t tex_height,void* data,uint32_t size)
+void CreateTextureFrom(	uint32_t tex_width,uint32_t tex_height,void* data,uint32_t size,snTextureArray* tex_array = nullptr)
 {
 	
 	if(pTexture)return;
@@ -210,12 +245,18 @@ void CreateTextureFrom(	uint32_t tex_width,uint32_t tex_height,void* data,uint32
     text_img.format = VK_FORMAT_R8G8B8A8_UNORM;
     text_img.extent = {tex_width, tex_height, 1};
     text_img.mipLevels = 1;
-    text_img.arrayLayers = 1; //     
-    text_img.samples = VK_SAMPLE_COUNT_1_BIT;
+    text_img.arrayLayers = 1; 
+	text_img.samples = VK_SAMPLE_COUNT_1_BIT;
     text_img.tiling = VK_IMAGE_TILING_LINEAR;
     text_img.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     text_img.flags = 0;
-    text_img.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;   
+    text_img.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;   
+	if(tex_array)
+	{
+	text_img.arrayLayers = tex_array->regionCount; 
+	text_img.tiling = VK_IMAGE_TILING_OPTIMAL;
+	}
+
 
 	if (vkCreateImage(device, &text_img, nullptr, &pTexture->image) != VK_SUCCESS) {
         throw std::runtime_error("failed to create texture image!");
@@ -231,17 +272,9 @@ void CreateTextureFrom(	uint32_t tex_width,uint32_t tex_height,void* data,uint32
 	err = vkAllocateMemory(device, &alloc_info, nullptr, &vkdevicemem);
     err = vkBindImageMemory(device, pTexture->image, vkdevicemem, 0);
 
-	//SERT PAS POUR L'INSTANT
-	VkImageSubresource subres{};
-		subres.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		subres.mipLevel = 0;
-		subres.arrayLayer = 0;
-		
-	VkSubresourceLayout layout_data;
-	vkGetImageSubresourceLayout(device, pTexture->image, &subres, &layout_data);
 	//CREATE COMMAND 
 	snCommand copyCmd;
-	copyCmd.Begin(commandPool);
+	copyCmd.Begin(pdevice->commandPool);
 	
 	VkBufferCopy copyRegion = {};
 	copyRegion.srcOffset = 0;
@@ -254,16 +287,46 @@ void CreateTextureFrom(	uint32_t tex_width,uint32_t tex_height,void* data,uint32
 	BeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
  
 	vkBeginCommandBuffer(copyCmd,&BeginInfo);
-	CommandImgMemBarrier(copyCmd,pTexture->image,VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 	
-	VkBufferImageCopy region = {};
-        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        region.imageSubresource.layerCount = 1;
-        region.imageExtent.width = tex_width;
-        region.imageExtent.height = tex_height;
-        region.imageExtent.depth = 1;
+	//subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+	VkImageSubresourceRange subresourceRange = {};
+		subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		subresourceRange.baseArrayLayer = 0;
+		subresourceRange.baseMipLevel = 1;
+		subresourceRange.layerCount = 0;
+		subresourceRange.levelCount = 1;
 		
-	vkCmdCopyBufferToImage(copyCmd,stage.vkbuffer,pTexture->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+	VkBufferImageCopy* region = nullptr;
+	uint32_t regionCount = 1;
+	
+	if(tex_array)
+		{
+			subresourceRange.layerCount = tex_array->regionCount;
+			subresourceRange.baseMipLevel = 0;
+			CommandImgMemBarrier(copyCmd,pTexture->image,VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,&subresourceRange);
+			region = tex_array->region;
+		}
+		else
+		{
+			CommandImgMemBarrier(copyCmd,pTexture->image,VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+			region = new VkBufferImageCopy[1];
+			region[0].bufferOffset = 0;
+			region[0].bufferRowLength = 0;
+			region[0].bufferImageHeight = 0;
+			region[0].imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			region[0].imageSubresource.layerCount = 1;
+			region[0].imageSubresource.mipLevel = 0;
+			region[0].imageSubresource.baseArrayLayer = 0;
+			region[0].imageExtent.width = tex_width;
+			region[0].imageExtent.height = tex_height;
+			region[0].imageExtent.depth = 1;
+			region[0].imageOffset.x = 
+			region[0].imageOffset.y = 
+			region[0].imageOffset.z = 0; 
+
+		}
+	
+	vkCmdCopyBufferToImage(copyCmd,stage.vkbuffer,pTexture->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, regionCount, region);
 	CommandImgMemBarrier(copyCmd,pTexture->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	err = vkEndCommandBuffer(copyCmd);
 	
@@ -341,6 +404,47 @@ void CreateTexture(const char* filename)
 		}
 	}
 }
+void AddArrayElm(const char* filename,int* tex_width,int* tex_height, int* tex_channels)
+{
+	unsigned char* img= STBI_ReadImage(filename,tex_width,tex_height,tex_channels);
+	if(img)
+	{
+		if((*tex_channels) == 3){
+		(*tex_channels) = 4;
+		unsigned char* img4 = new uint8_t[(*tex_width)*(*tex_height)*4];
+		for(int x=0;x<(*tex_width) * (*tex_height);x++)
+		{
+			img4[x*4] = img[x*3];
+			img4[x*4+1] = img[x*3+1];
+			img4[x*4+2] = img[x*3+2];
+			img4[x*4+3] = 255;
+		}
+		STBI_FreeImage(img);
+		CreateTransferBuffer(img4,(*tex_width)*(*tex_height)*4);
+		delete [] img4;
+		return;
+		}
+		CreateTransferBuffer(img,(*tex_width)*(*tex_height)*4);
+		STBI_FreeImage(img);
+	}
+}
+void CreateTextureArray(snBuffer* buffers,uint32_t number,int tex_width,int tex_height, int tex_channels, snTextureArray* tex_array = nullptr)
+{
+	uint32_t mem_size = 0;
+	for(uint32_t i = 0; i < number; i++)
+	{
+		mem_size += buffers[i].mem_size;
+	}
+	unsigned char* img4 = new uint8_t[mem_size];
+	uint32_t offset = 0;
+	for(uint32_t i = 0; i < number; i++)
+	{
+		memcpy(&img4[offset],buffers[i].mem_ptr,buffers[i].mem_size);
+		offset += buffers[i].mem_size;
+	}
+	CreateTextureFrom(tex_width,tex_height,img4,mem_size,tex_array);
+	delete [] img4;
+}
 void Lock( uint32_t where, uint32_t size, void* *lptr, uint32_t flags = 0)
 {
 	range = new VkMappedMemoryRange;//VK_WHOLE_SIZE
@@ -358,9 +462,10 @@ void UnLock()
 	delete range;
 }
 //Detruit le buffer
+
 void Release()
 	{
-		if(pTexture)
+		if(pTexture && vkbuffer)
 		{
 			vkDestroySampler(device,pTexture->sampler, nullptr);
 			vkDestroyImageView(device, pTexture->imageview, nullptr);
@@ -370,5 +475,20 @@ void Release()
 		}			
 		if(vkdevicemem)vkFreeMemory(device,vkdevicemem,nullptr);
 		if(vkbuffer)vkDestroyBuffer(device,vkbuffer,nullptr);
+	}
+VkDescriptorSetLayoutBinding BindLayout(uint32_t binding)
+	{
+	VkDescriptorSetLayoutBinding Binding;
+	Binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	Binding.binding = binding;
+	Binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	Binding.descriptorCount = 1;
+	Binding.pImmutableSamplers = nullptr;
+	if(pTexture)
+	{
+		Binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		Binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	}
+	return Binding;
 	}
 };

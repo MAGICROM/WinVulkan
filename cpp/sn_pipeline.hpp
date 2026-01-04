@@ -1,4 +1,9 @@
 
+struct MeshPushConstants {
+	glm::vec4 data;
+	glm::mat4 model;
+};
+
 struct UBOVS{
 		glm::mat4 projection;
 		glm::mat4 view;
@@ -143,10 +148,12 @@ struct snPipeline
 	VkPipeline 									Pipe;
 	snDescriptor								Descriptor;
 
-	VkShaderModuleCreateInfo*					Shaders;		//[]		
-	VkPipelineShaderStageCreateInfo*            ShaderStageInfo;//[]		
-	VkDescriptorSetLayoutBinding*   			bindings;		//[]
-	VkDynamicState*                 			dynamicStates;	//[]
+	VkShaderModuleCreateInfo*					Shaders = nullptr;			//[]		
+	VkPipelineShaderStageCreateInfo*            ShaderStageInfo= nullptr;	//[]		
+	VkDescriptorSetLayoutBinding*   			bindings= nullptr;			//[]
+	VkDynamicState*                 			dynamicStates= nullptr;		//[]
+	int 										push_constants_count;
+	VkPushConstantRange* 						push_constants= nullptr; 	//[]
 	
 	VkPipelineVertexInputStateCreateInfo        vertexInputInfo{};
 	VkPipelineInputAssemblyStateCreateInfo      inputAssembly{};
@@ -163,6 +170,15 @@ struct snPipeline
 	
 void Reset(){
 	memset(this,0,sizeof(snPipeline));
+}
+void PushConstants(int x){
+	push_constants_count = x;
+	push_constants = new VkPushConstantRange[x];
+}
+void PushConstantsInfo(int x,uint32_t size,VkShaderStageFlags stage){
+	push_constants[x].offset = 0;
+	push_constants[x].size = size;
+	push_constants[x].stageFlags = stage;
 }
 void LoadShader(int x,const std::string &filename,const char* fun,VkShaderStageFlagBits stage)
 {
@@ -297,6 +313,11 @@ void Create(VkRenderPass rp){
 		
 		pipelineLayoutInfo.setLayoutCount = 1; //un par frame
 		pipelineLayoutInfo.pSetLayouts = &Descriptor.descriptorSetLayout; //<---- Ils servent ici un
+		if(push_constants)
+		{
+			pipelineLayoutInfo.pushConstantRangeCount = push_constants_count;
+			pipelineLayoutInfo.pPushConstantRanges = push_constants;
+		}
 		
 		for(volatile int i = 0; i < GfxPipelineInfo.stageCount; i++)
 		{
@@ -342,6 +363,7 @@ void Create(VkRenderPass rp){
 		}
 		if(dynamicStates)delete [] dynamicStates;
 		if(bindings)delete [] bindings; 
+		if(push_constants)delete [] push_constants;
 	};
 void Release(){
 		Descriptor.DescriptorsDestroy();

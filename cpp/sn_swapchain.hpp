@@ -177,7 +177,8 @@ struct snSwapChain
 	VkCommandBuffer SN_ARRAY_BY_FRAME 		*commandBuffers = nullptr; 		
 	VkCommandBuffer SN_ARRAY_BY_FRAME 		*imgui_commandBuffers = nullptr; 
 	
-	std::vector<LWCMODEL> models;	 				
+	std::vector<LWCMODEL> models;
+	snBuffer Array;	 				
 	
 	//SYNCHRO
 	VkSemaphore* SN_ARRAY_BY_FRAME renderSema{VK_NULL_HANDLE};
@@ -224,6 +225,26 @@ void LoadAssets()
 			delete [] pVertex;
 			models.push_back(*pModel2);
 		}
+
+		const int total_textures = 8;
+		int w,h,c;
+		snBuffer textures[total_textures];
+		snTextureArray TextureArray(total_textures);
+		textures[0].AddArrayElm("assets/textures/tex_sol0.bmp",&w,&h,&c);TextureArray.Set(0,w,h);
+		textures[1].AddArrayElm("assets/textures/tex_sol1.bmp",&w,&h,&c);TextureArray.Set(1,w,h);
+		textures[2].AddArrayElm("assets/textures/tex_mur0.bmp",&w,&h,&c);TextureArray.Set(2,w,h);
+		textures[3].AddArrayElm("assets/textures/tex_mur1.bmp",&w,&h,&c);TextureArray.Set(3,w,h);
+		textures[4].AddArrayElm("assets/textures/tex_por.bmp",&w,&h,&c);TextureArray.Set(4,w,h);
+		textures[5].AddArrayElm("assets/textures/tex_pla.bmp",&w,&h,&c);TextureArray.Set(5,w,h);
+		textures[6].AddArrayElm("assets/textures/tex_mou.bmp",&w,&h,&c);TextureArray.Set(6,w,h);
+		textures[7].AddArrayElm("assets/textures/tex_obj.bmp",&w,&h,&c);TextureArray.Set(7,w,h);
+		Array.CreateTextureArray(textures,8,w,h,c,&TextureArray);
+		for(int i=0;i<total_textures;i++)
+		{
+			textures[i].Release();
+		}
+	
+	
 	}
 
 void Pipelines_create()
@@ -293,12 +314,22 @@ void Pipelines_create()
 	pm2.LoadShader(1,"shaders/instancing.frag.spv","main",VK_SHADER_STAGE_FRAGMENT_BIT);
 	pm2.vertexInputInfo = Vertex::VertexInputState();
 
-	bind.Binding = UBOVS::BindLayout(0);
 	bind.count = 1;
 	bind.buffers = new snBuffer;
 	bind.buffers->CreateUniformBuffer(&uboVS,sizeof(UBOVS));
+	bind.Binding = bind.buffers->BindLayout(0);
 	pm2.Descriptor.bindings.push_back(bind);
+	
+	bind.count = 1;
+	bind.buffers = new snBuffer;
+	bind.buffers->CreateTextureInstance(Array);
+	bind.Binding = bind.buffers->BindLayout(1);
+	pm2.Descriptor.bindings.push_back(bind);
+	
 	pm2.Descriptor.DescriptorsCreate();
+	
+	pm2.PushConstants(1);
+	pm2.PushConstantsInfo(0,sizeof(MeshPushConstants),VK_SHADER_STAGE_VERTEX_BIT);
 
 	//Rasterizer
 	pm2.rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
@@ -351,7 +382,7 @@ void commandbuffers_create()
 		// STEP 11 POOL BUFFER SYNC
 		VkCommandBufferAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		allocInfo.commandPool = commandPool;
+		allocInfo.commandPool = pdevice->commandPool;
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		allocInfo.commandBufferCount = swap_imageCount;
 
@@ -453,7 +484,19 @@ void commandbuffers_create()
 								VK_PIPELINE_BIND_POINT_GRAPHICS, 
 								pipelines[1].PipeLayout, 0, 1, &pipelines[1].Descriptor.descriptorsets[i], 0, nullptr);
 		
+		MeshPushConstants constants;
+		constants.data.x = 0;
+		constants.model = glm::mat4{ 1.0f };
+		
+		vkCmdPushConstants(commandBuffers[i], pipelines[1].PipeLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &constants);
+
 		models[0].Draw(commandBuffers[i]);
+		
+		constants.data.x = 2;
+		constants.model = glm::rotate(glm::mat4{ 1.0f }, 0.2f, glm::vec3(0, 1, 0));
+		
+		vkCmdPushConstants(commandBuffers[i], pipelines[1].PipeLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &constants);
+
 		models[1].Draw(commandBuffers[i]);
 				
 		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[0].Pipe);
@@ -478,13 +521,13 @@ void commandbuffers_destroy()
 {
 		if(commandBuffers)
 			{
-			vkFreeCommandBuffers(device,commandPool,swap_imageCount,commandBuffers);
+			vkFreeCommandBuffers(device,pdevice->commandPool,swap_imageCount,commandBuffers);
 			delete [] commandBuffers;
 			commandBuffers = nullptr;
 			}
 		if(imgui_commandBuffers)
 			{
-			vkFreeCommandBuffers(device,commandPool,swap_imageCount,imgui_commandBuffers);
+			vkFreeCommandBuffers(device,pdevice->commandPool,swap_imageCount,imgui_commandBuffers);
 			delete [] imgui_commandBuffers;
 			imgui_commandBuffers = nullptr;
 			}
@@ -955,14 +998,7 @@ void SWAPCHAIN_Destroy(){
 void LightUp()
 	{
 		snCommand::TransfertCommandPool_Create();
-		VkCommandPoolCreateInfo poolInfo{};
-		poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-		poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-		poolInfo.queueFamilyIndex = graphicsFamily;
-		if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
-			throw std::runtime_error("failed to create command pool!");
-		}
-		
+
 		LoadAssets();
 		
 		renderpasses_Create(); // II
@@ -981,16 +1017,10 @@ void LightDown()
 			model.Release();
 		}
 		models.clear();
+		Array.Release();
 		SyncObjects_Destroy();
 		SWAPCHAIN_Destroy();
 		commandbuffers_destroy();
-		
-		if(commandPool)
-			{
-			vkDestroyCommandPool(device, commandPool, nullptr);
-			commandPool = VK_NULL_HANDLE;
-			}
-
 		Pipelines_destroy(); // III
 		renderpasses_Destroy(); // II
 

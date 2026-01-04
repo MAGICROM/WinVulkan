@@ -416,6 +416,16 @@ DWORD WINAPI MyThreadFunction( LPVOID lpParam )
 	VkQueue transferQueue;
 	
 	//VULKAN API----------------------------------------------------------------
+
+	bool KHRONOS_validation = false;
+	std::vector<const char*> enabledDeviceExtensions;
+	std::vector<const char*> enabledInstanceExtensions;
+	std::vector<std::string> supportedInstanceExtensions;
+	VkPhysicalDeviceProperties deviceProperties;
+	// Stores the features available on the selected physical device (for e.g. checking if a feature is available)
+	VkPhysicalDeviceFeatures deviceFeatures;
+	// Stores all available memory (type) properties for the physical device
+	VkPhysicalDeviceMemoryProperties deviceMemoryProperties;
     
 	VkInstance instance;
 	
@@ -432,6 +442,8 @@ DWORD WINAPI MyThreadFunction( LPVOID lpParam )
 	
 	//DRIVER VULKAN-------------------------------------------------------------
     
+	void* deviceCreatepNextChain = nullptr;
+	VkPhysicalDeviceFeatures enabledFeatures{};
 	VkDevice device;
    	
 	//MEMORY--------------------------------------------------------------------
