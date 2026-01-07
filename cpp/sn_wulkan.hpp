@@ -6,6 +6,13 @@ void EcranOff();
 }*/
 struct snDevice
 {
+	struct Familles
+	{
+		uint32_t graphics;
+		uint32_t compute;
+		uint32_t transfer;
+	} queueFamilyIndices;
+	
 	VkDevice _device = VK_NULL_HANDLE;
 	/** @brief Physical device representation */
 	VkPhysicalDevice physicalDevice;
@@ -28,12 +35,7 @@ struct snDevice
 	/** @brief Set to true when the debug marker extension is detected */
 	bool enableDebugMarkers = false;
 	/** @brief Contains queue family indices */
-	struct
-	{
-		uint32_t graphics;
-		uint32_t compute;
-		uint32_t transfer;
-	} queueFamilyIndices;
+	
 	explicit snDevice(VkPhysicalDevice physicalDevice);
 	~snDevice();
 	uint32_t getQueueFamilyIndex(VkQueueFlags queueFlags) const;
@@ -42,7 +44,6 @@ struct snDevice
 	VkCommandPool   createCommandPool(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags createFlags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 	operator VkDevice()const {return _device;};
 };
-
 VkCommandPool snDevice::createCommandPool(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags createFlags)
 	{
 		VkCommandPoolCreateInfo cmdPoolInfo = {};
@@ -53,12 +54,10 @@ VkCommandPool snDevice::createCommandPool(uint32_t queueFamilyIndex, VkCommandPo
 		check_vk_result(vkCreateCommandPool(_device, &cmdPoolInfo, nullptr, &cmdPool));
 		return cmdPool;
 	}
-
 bool snDevice::extensionSupported(std::string extension)
 	{
 		return (std::find(supportedExtensions.begin(), supportedExtensions.end(), extension) != supportedExtensions.end());
 	}
-	
 uint32_t snDevice::getQueueFamilyIndex(VkQueueFlags queueFlags) const
 {
 	// Dedicated queue for compute
@@ -98,7 +97,6 @@ uint32_t snDevice::getQueueFamilyIndex(VkQueueFlags queueFlags) const
 
 	throw std::runtime_error("Could not find a matching queue family index");
 }
-
 VkResult snDevice::createLogicalDevice(VkPhysicalDeviceFeatures enabledFeatures, std::vector<const char*> enabledExtensions, void* pNextChain, bool useSwapChain, VkQueueFlags requestedQueueTypes)
 	{			
 		// Desired queues need to be requested upon logical device creation
@@ -227,7 +225,6 @@ VkResult snDevice::createLogicalDevice(VkPhysicalDeviceFeatures enabledFeatures,
 
 		return result;
 	}
-	
 snDevice::snDevice(VkPhysicalDevice physicalDevice)
 {
 	assert(physicalDevice);
@@ -262,7 +259,6 @@ snDevice::snDevice(VkPhysicalDevice physicalDevice)
 		}
 	}
 }
-
 snDevice::~snDevice()
 	{
 		if (commandPool)
@@ -274,8 +270,6 @@ snDevice::~snDevice()
 			vkDestroyDevice(_device, nullptr);
 		}
 	}
-
-
 snDevice* pdevice = nullptr;
 void getEnabledFeatures() {}
 void getEnabledExtensions() {}
@@ -658,7 +652,7 @@ void sn_Wulkaninit(HINSTANCE hinstance,HWND hwnd)
 
 		swap_imageCount = capabilities.minImageCount + 1;
 
-		#ifdef USE_IMGUI_PLEASE_IFYOUCAN
+#ifdef USE_IMGUI_PLEASE_IFYOUCAN
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGuiIO& io = ImGui::GetIO(); (void)io;

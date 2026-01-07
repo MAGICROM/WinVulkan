@@ -10,7 +10,7 @@ struct snCamera
 	glm::mat4 m4_Rotation = glm::mat4(1.f);
 	
 	float focale = 50.f; //mm
-	float fov = 2.f * glm::atan(18.f/focale);
+	float fov = 2.f * glm::atan(18.f/focale); // 18 = 36mm / 2
 	
 	float z_near = 0.1f;
 	float z_far = 50.0f;
@@ -210,7 +210,7 @@ void LoadAssets()
 		}
 
 		Vertex* pVertex;
-		uint32_t num_vertex = Read_Obj((void**)&pVertex,nullptr);
+		uint32_t num_vertex = Read_Obj("assets/obj/cross.obj",(void**)&pVertex,nullptr);
 		if(pVertex)
 		{
 			snBuffer stage;
@@ -229,16 +229,16 @@ void LoadAssets()
 		const int total_textures = 8;
 		int w,h,c;
 		snBuffer textures[total_textures];
-		snTextureArray TextureArray(total_textures);
-		textures[0].AddArrayElm("assets/textures/tex_sol0.bmp",&w,&h,&c);TextureArray.Set(0,w,h);
-		textures[1].AddArrayElm("assets/textures/tex_sol1.bmp",&w,&h,&c);TextureArray.Set(1,w,h);
-		textures[2].AddArrayElm("assets/textures/tex_mur0.bmp",&w,&h,&c);TextureArray.Set(2,w,h);
-		textures[3].AddArrayElm("assets/textures/tex_mur1.bmp",&w,&h,&c);TextureArray.Set(3,w,h);
-		textures[4].AddArrayElm("assets/textures/tex_por.bmp",&w,&h,&c);TextureArray.Set(4,w,h);
-		textures[5].AddArrayElm("assets/textures/tex_pla.bmp",&w,&h,&c);TextureArray.Set(5,w,h);
-		textures[6].AddArrayElm("assets/textures/tex_mou.bmp",&w,&h,&c);TextureArray.Set(6,w,h);
-		textures[7].AddArrayElm("assets/textures/tex_obj.bmp",&w,&h,&c);TextureArray.Set(7,w,h);
-		Array.CreateTextureArray(textures,8,w,h,c,&TextureArray);
+		snTextureArray TextureArray;
+		textures[0].AddArrayElm(TextureArray,"assets/textures/tex_sol0.bmp",&w,&h,&c);
+		textures[1].AddArrayElm(TextureArray,"assets/textures/tex_sol1.bmp",&w,&h,&c);
+		textures[2].AddArrayElm(TextureArray,"assets/textures/tex_mur0.bmp",&w,&h,&c);
+		textures[3].AddArrayElm(TextureArray,"assets/textures/tex_mur1.bmp",&w,&h,&c);
+		textures[4].AddArrayElm(TextureArray,"assets/textures/tex_por.bmp",&w,&h,&c);
+		textures[5].AddArrayElm(TextureArray,"assets/textures/tex_pla.bmp",&w,&h,&c);
+		textures[6].AddArrayElm(TextureArray,"assets/textures/tex_mou.bmp",&w,&h,&c);
+		textures[7].AddArrayElm(TextureArray,"assets/textures/tex_mum3.bmp",&w,&h,&c);
+		Array.CreateTextureArray(TextureArray,textures,w,h,c);
 		for(int i=0;i<total_textures;i++)
 		{
 			textures[i].Release();
@@ -403,10 +403,12 @@ void commandbuffers_create()
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		
+		if (vkBeginCommandBuffer(commandBuffers[i], &beginInfo) != VK_SUCCESS) 
+			throw std::runtime_error("failed to begin recording command buffer!");
+
 		VkClearValue clearValues[2];
 		clearValues[0].color = {{0.3f, 0.3f, 0.3f, 1.0f}};
 		clearValues[1].depthStencil = { 1.0f, 0 };
-		
 		VkRenderPassBeginInfo renderPassBeginInfo{};
 		renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		renderPassBeginInfo.renderPass = renderPass;
@@ -414,55 +416,7 @@ void commandbuffers_create()
 		renderPassBeginInfo.renderArea.offset = {0, 0};
 		renderPassBeginInfo.renderArea.extent = window_size;
 		renderPassBeginInfo.clearValueCount = 2;
-		renderPassBeginInfo.pClearValues = clearValues;
-		
-		/*VkClearValue* pClearColor = &clearColor;
-		VkClearValue* pDepthValue = nullptr;
-
-		VkRenderingAttachmentInfoKHR Color = {};
-		VkRenderingAttachmentInfo Depth = {};
-
-		Color.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-		Color.imageView = swapChainImageViews[i];
-		Color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-		Color.resolveMode = VK_RESOLVE_MODE_NONE;
-		Color.imageView = VK_NULL_HANDLE;
-		Color.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		Color.loadOp = pClearColor ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
-		Color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-		if(pClearColor)
-		{
-			Color.clearValue = *pClearColor;
-		}
-		
-		Depth.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-		Depth.imageView = VK_NULL_HANDLE;
-		Depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-		Depth.resolveMode = VK_RESOLVE_MODE_NONE;
-		Depth.resolveImageView = VK_NULL_HANDLE;
-		Depth.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		Depth.loadOp = pDepthValue ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
-		Depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-		if(pDepthValue)
-		{
-			Depth.clearValue = *pDepthValue;
-		}
-
-		VkRenderingInfoKHR RenderingInfo = {};
-		RenderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
-		RenderingInfo.renderArea = {{0,0},{sn_interface.destWidth,sn_interface.destHeight}};
-		RenderingInfo.layerCount = 0;
-		RenderingInfo.viewMask = 0;
-		RenderingInfo.colorAttachmentCount = 1;
-		RenderingInfo.pColorAttachments = &Color;
-		RenderingInfo.pDepthAttachment = &Depth;*/
-
-		if (vkBeginCommandBuffer(commandBuffers[i], &beginInfo) != VK_SUCCESS) 
-			throw std::runtime_error("failed to begin recording command buffer!");
-
-		//SWAPCHAIN_MemoryBarrier(commandBuffers[i],swapChainImages[i],VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);	
+		renderPassBeginInfo.pClearValues = clearValues;	
 		vkCmdBeginRenderPass(commandBuffers[i],&renderPassBeginInfo,VK_SUBPASS_CONTENTS_INLINE);
 		
 		VkViewport viewport{};
@@ -485,18 +439,14 @@ void commandbuffers_create()
 								pipelines[1].PipeLayout, 0, 1, &pipelines[1].Descriptor.descriptorsets[i], 0, nullptr);
 		
 		MeshPushConstants constants;
-		constants.data.x = 0;
+		constants.data.x = 7;
 		constants.model = glm::mat4{ 1.0f };
-		
 		vkCmdPushConstants(commandBuffers[i], pipelines[1].PipeLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &constants);
-
 		models[0].Draw(commandBuffers[i]);
 		
-		constants.data.x = 2;
+		constants.data.x = 7;
 		constants.model = glm::rotate(glm::mat4{ 1.0f }, 0.2f, glm::vec3(0, 1, 0));
-		
 		vkCmdPushConstants(commandBuffers[i], pipelines[1].PipeLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &constants);
-
 		models[1].Draw(commandBuffers[i]);
 				
 		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[0].Pipe);
@@ -1212,6 +1162,7 @@ inline void sn_VulkandrawOverlay(uint32_t iIndex = 0)
 }   
 void sn_Vulkandraw(){        
 
+	
 	static uint32_t imageIndex = 0;
 	//vkWaitForFences(device, 1, &ECRAN.inFlightFence, VK_TRUE, UINT64_MAX);
 	err = vkAcquireNextImageKHR(device, 
@@ -1240,6 +1191,8 @@ void sn_Vulkandraw(){
 	if(err == VK_ERROR_SURFACE_LOST_KHR)std::cout << "VK_ERROR_SURFACE_LOST_KHR" << std::endl;
 	if(err == VK_ERROR_UNKNOWN)std::cout << "VK_ERROR_UNKNOWN" << std::endl;
 	
+	sn_Updates(imageIndex);
+	
 	// OFFLINE (1340)
 		//vkBeginCommandBuffer
 		//vkCmdPipelineBarrier
@@ -1257,14 +1210,6 @@ void sn_Vulkandraw(){
 		//vkQueueSubmit
 		//vkQueuePresentKHR
 
-	#ifdef USE_IMGUI_PLEASE_IFYOUCAN
-	sn_VulkandrawOverlay(imageIndex);
-	VkCommandBuffer batch[2] = {ecran.commandBuffers[imageIndex],ecran.imgui_commandBuffers[imageIndex]};
-	#else
-	VkCommandBuffer batch[1] = {ECRAN.commandBuffers[imageIndex]};
-    #endif
-
-
 	VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 	
 	VkSubmitInfo submitInfo{};
@@ -1273,16 +1218,16 @@ void sn_Vulkandraw(){
 	submitInfo.pWaitSemaphores = &ecran.presentSema;
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = &ecran.renderSema[imageIndex];
-
 	submitInfo.pWaitDstStageMask = waitStages;
-	#ifdef USE_IMGUI_PLEASE_IFYOUCAN
-	submitInfo.commandBufferCount = 2;
-	#else
 	submitInfo.commandBufferCount = 1;
-	#endif
+#ifdef USE_IMGUI_PLEASE_IFYOUCAN
+	sn_VulkandrawOverlay(imageIndex);
+	submitInfo.commandBufferCount = 2;
+	VkCommandBuffer batch[2] = {ecran.commandBuffers[imageIndex],ecran.imgui_commandBuffers[imageIndex]};
+#else
+	VkCommandBuffer batch[1] = {ecran.commandBuffers[imageIndex]};
+#endif
 	submitInfo.pCommandBuffers = batch;//&ECRAN.commandBuffers[imageIndex];
-	
-	sn_Updates(imageIndex);
 
 	err = vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
 

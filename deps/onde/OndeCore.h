@@ -26,6 +26,13 @@ typedef struct strRegisterSet
 static REGISTER_SET ASIO_RegisterSet;
 static int ASIO_DefaultCanal = 0;
 
+enum soundmessage
+{
+	msg_stop = 0, //quit driver
+	msg_play, //joue un son	 ptr = uint32_t*
+	msg_music //lis une musique ptr =  char*
+};
+
 enum dsp_opcode
 {
 	opcode_return = 0,
@@ -89,9 +96,9 @@ struct OndeMsg
 class OndeCore
 {
 	MiniBase<OndeComponent> BaseComponent;
-	unsigned long count_gfx;
-	//messages 
+
 	OndeMsg message[16];
+	unsigned long count_gfx;
 	unsigned long count_msg;
 	OndeComponent* first_gfx;
 public:
@@ -99,7 +106,7 @@ public:
 	void UnStoreGfx(OndeComponent* p);
 	OndeCore();
 	void PostMsg(int port, int msg, void* ptr);
-	bool GetMsg(unsigned long *pcount_msg, OndeMsg *pmessage); //while(GetMsg(mypos,&OndeMsg)){}
+	bool GetMsg(unsigned long *pcount_msg, OndeMsg *pmessage);
 	OndeComponent* List() { return first_gfx; }
 	static OndeCore& Instance();
 };
@@ -212,7 +219,7 @@ public:
 	}
 };
 
-#ifdef ONDECORE_CODE
+#ifdef ONDECORE_IMPLEMENTATION
 OndeCore& OndeCore::Instance() {
 	static OndeCore TheCloud;
 	return TheCloud;
@@ -276,6 +283,7 @@ unsigned long MiniBase<T>::Add(T * p)
 	number++;
 	return i;
 }
+
 
 void OndeCore::PostMsg(int port, int msg, void* ptr)
 {

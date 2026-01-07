@@ -56,8 +56,8 @@ void CommandImgMemBarrier(VkCommandBuffer& buf,VkImage img,VkImageLayout de,VkIm
 		{
 			memory_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;//VK_ACCESS_TRANSFER_WRITE_BIT;
 			memory_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-			Source = VK_PIPELINE_STAGE_TRANSFER_BIT;
-			Destination = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			Source = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+			Destination = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 		}
 		if(de == VK_IMAGE_LAYOUT_PREINITIALIZED && a == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 		{
@@ -189,9 +189,9 @@ struct Vertex
 		return info;
 	}
 };
-uint32_t Read_Obj(void** ppVertex,void** ppIndex)
+uint32_t Read_Obj(const char* filename, void** ppVertex,void** ppIndex)
 {
-	std::vector<char> object = readFile("assets/obj/cross.obj");
+	std::vector<char> object = readFile(filename);
 	if(!object.size())return 0; //PAS DE fiCHIER
 	std::vector<char> line;
 	bool newline = true;

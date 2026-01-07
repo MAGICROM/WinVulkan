@@ -1,7 +1,7 @@
 
 struct MeshPushConstants {
-	glm::vec4 data;
 	glm::mat4 model;
+	glm::vec4 data;
 };
 
 struct UBOVS{
