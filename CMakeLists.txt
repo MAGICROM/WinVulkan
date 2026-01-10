@@ -205,10 +205,10 @@ target_link_libraries(${PROJECT_NAME}
 imgui
 imguizmo
 Dwmapi.lib
-:vulkan-1.dll )
-target_link_libraries(${PROJECT_NAME} ogg)
-target_link_libraries(${PROJECT_NAME} vorbisfile)
-target_link_libraries(${PROJECT_NAME} :OpenAL32.dll)
+:vulkan-1.dll
+ogg
+vorbisfile
+:OpenAL32.dll)
 #==============================================================================
 # AUTO COMPILE SHADERS
 #

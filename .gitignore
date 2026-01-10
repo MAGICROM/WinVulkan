@@ -1,0 +1,11 @@
+build/
+deps/dr_libs
+deps/glm
+deps/imgui
+deps/imGuIZMO.quat
+deps/ogg
+deps/vorbis
+assets/wav
+Windows.exe
+assets/objets
+assets/textures

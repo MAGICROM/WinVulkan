@@ -945,7 +945,11 @@ void SWAPCHAIN_Destroy(){
             
         vkDestroySwapchainKHR(device, swapChain, nullptr);
     }
-void LightUp()
+	
+
+const char* mus = "assets\\ogg\\EVE_Rock_01.ogg";
+uint32_t Zo = 1;
+	void LightUp()
 	{
 		snCommand::TransfertCommandPool_Create();
 
@@ -957,6 +961,10 @@ void LightUp()
 		SWAPCHAIN_Resize(); 
 		
 		camera.v3_position = glm::vec3(0,0.5f,0.5f);
+		
+	
+		//OndeCore::Instance().PostMsg(888,msg_play,&Zo);
+		//OndeCore::Instance().PostMsg(888,msg_music,(void*)mus);
 	}
 void LightDown()
 	{
@@ -979,12 +987,16 @@ void LightDown()
 		vkDeviceWaitIdle(device);
 	}
 }ecran;
+
+extern void SoundUp();
 void EcranOn()
 {
+	SoundUp();
 	ecran.LightUp();
 }
 void EcranOff()
 {
+	OndeCore::Instance().PostMsg(888,msg_stop,nullptr);
 	ecran.LightDown();
 	
 }

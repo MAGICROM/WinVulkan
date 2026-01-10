@@ -2,7 +2,7 @@
 /**/
 //#define ONDECORE_CODE for using the library
 #define ONDECORE_IMPLEMENTATION
-#include <onde/OndeCore.h>
+#include <OndeCore.h>
 
 #include <al.h>
 #include <alc.h>
@@ -26,6 +26,9 @@
 #include "vorbis/codec.h"
 #include "vorbis/vorbisfile.h"
 
+#define NUMBUFFERS              (4)
+#define	SERVICE_UPDATE_PERIOD	(20)
+
 struct SoundBuffer
 {
 	ALuint SoundBuffer;
@@ -44,8 +47,56 @@ struct Sound
 	
 };
 
-#define NUMBUFFERS              (4)
-#define	SERVICE_UPDATE_PERIOD	(20)
+struct Music
+{
+	ALuint		    uiBuffers[NUMBUFFERS];
+	ALuint		    uiSource;
+	ALuint			uiBuffer;
+	ALint			iState;
+	
+	ALint			iBuffersProcessed, iTotalBuffersProcessed, iQueuedBuffers;
+	unsigned long	ulFrequency = 0;
+	unsigned long	ulFormat = 0;
+	unsigned long	ulChannels = 0;
+	unsigned long	ulBufferSize = 0;
+	unsigned long	ulBytesWritten = 0;
+	char*			pDecodeBuffer;
+
+	// Open Ogg Stream
+	FILE *pOggVorbisFile = nullptr;
+	ov_callbacks	sCallbacks;
+	OggVorbis_File	sOggVorbisFile;
+	vorbis_info* psVorbisInfo;
+
+	void Release();
+	int Continue();
+	void LoadAndStart(const char* filename);
+};
+
+class clOndeALVorbis : public Visible
+{
+	ALCdevice* device;
+	ALCcontext* context;
+	std::vector<SoundBuffer> soundbuffers;
+	std::vector<Sound*> sounds;
+	std::vector<Music*> musics;
+public:
+	void Start();
+	void Loop();
+	void Stop();
+	void AddSound(const char* filename);
+	void PlayMusic(const char* filename);
+	void Play(uint32_t s,float* pos,float* vel);
+	void Update();
+	void Release();
+	
+	~clOndeALVorbis()
+	{
+	}
+	clOndeALVorbis() :Visible(ocmclass_openAL)
+	{
+	}
+};
 
 size_t ov_read_func(void *ptr, size_t size, size_t nmemb, void *datasource)
 {
@@ -116,31 +167,6 @@ unsigned long DecodeOggVorbis(OggVorbis_File *psOggVorbisFile, char *pDecodeBuff
 	return ulBytesDone;
 }
 
-struct Music
-{
-	ALuint		    uiBuffers[NUMBUFFERS];
-	ALuint		    uiSource;
-	ALuint			uiBuffer;
-	ALint			iState;
-	
-	ALint			iBuffersProcessed, iTotalBuffersProcessed, iQueuedBuffers;
-	unsigned long	ulFrequency = 0;
-	unsigned long	ulFormat = 0;
-	unsigned long	ulChannels = 0;
-	unsigned long	ulBufferSize = 0;
-	unsigned long	ulBytesWritten = 0;
-	char*			pDecodeBuffer;
-
-	// Open Ogg Stream
-	FILE *pOggVorbisFile = nullptr;
-	ov_callbacks	sCallbacks;
-	OggVorbis_File	sOggVorbisFile;
-	vorbis_info* psVorbisInfo;
-
-	void Release();
-	int Continue();
-	void LoadAndStart(const char* filename);
-};
 void Music::Release()
 {
 	// Stop the Source and clear the Queue
@@ -161,7 +187,7 @@ void Music::Release()
 }
 int Music::Continue()
 {
-	std::this_thread::sleep_for(std::chrono::milliseconds(20));
+	
 
 				// Request the number of OpenAL Buffers have been processed (played) on the Source
 				iBuffersProcessed = 0;
@@ -305,33 +331,6 @@ void Music::LoadAndStart(const char* filename)
 	}
 	}
 };
-class clOndeALVorbis : public Visible
-{
-	ALCdevice* device;
-	ALCcontext* context;
-	std::vector<SoundBuffer> soundbuffers;
-	std::vector<Sound*> sounds;
-	std::vector<Music*> musics;
-public:
-	void Start();
-	void Loop();
-	void Stop();
-	void AddSound(const char* filename);
-	void PlayMusic(const char* filename);
-	int SoundCardsEnumeration();
-	int Run(clOndeALVorbis &Me);
-	void Play(uint32_t s,float* pos,float* vel);
-	void Update();
-	void Release();
-	
-	~clOndeALVorbis()
-	{
-	}
-	clOndeALVorbis() :Visible(ocmclass_openAL)
-	{
-	}
-};
-
 //OpenAL error checking
 #define OpenAL_ErrorCheck(message)\
 {\
@@ -346,18 +345,12 @@ public:
 FUNCTION_CALL;\
 OpenAL_ErrorCheck(FUNCTION_CALL)
 
-struct StartSound
-{
-	uint32_t sound;
-	float* _pos;
-	float* _vel;
-};
-
 void clOndeALVorbis::Loop()
 {
 	bool LOOP = true;
 	do
 	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(SERVICE_UPDATE_PERIOD));
 		Update();
 		OndeMsg x;
 		ALfloat value;
@@ -369,7 +362,7 @@ void clOndeALVorbis::Loop()
 				if(x.msg == msg_play)
 				{
 					uint32_t* pnum=(uint32_t*)x.ptr;
-					Play(*pnum,nullptr,nullptr);
+					Play((*pnum),nullptr,nullptr);
 				}
 				if(x.msg == msg_music)
 				{
@@ -378,7 +371,6 @@ void clOndeALVorbis::Loop()
 			}
 		}
 	} while (LOOP);
-
 };
 
 void clOndeALVorbis::Release(){
@@ -496,7 +488,7 @@ void clOndeALVorbis::Play(uint32_t s,float* pos,float* vel)
 		sound->_vel = vel;
 		
 		alec(alGenSources(1, &sound->Source));
-		alec(alSourcef(sound->Source, AL_PITCH, 1.f));
+		alec(alSourcef(sound->Source, AL_PITCH, 0.5f));
 		alec(alSourcef(sound->Source, AL_GAIN, 1.f));
 		alec(alSourcei(sound->Source, AL_LOOPING, AL_FALSE));
 		alec(alSourcei(sound->Source, AL_BUFFER, soundbuffers[s]));
@@ -540,3 +532,19 @@ void SoundBuffer::Release()
 {
 	alec(alDeleteBuffers(1, &SoundBuffer));
 };
+
+void SoundAndMusic()
+{
+	clOndeALVorbis soundcard;
+	soundcard.Start();
+	soundcard.AddSound("assets\\wav\\Attack.wav");
+	soundcard.AddSound("assets\\wav\\Zospell.wav");
+	soundcard.Loop();
+	soundcard.Stop();
+}
+
+void SoundUp()
+{
+	std::thread t1(SoundAndMusic);
+    t1.detach();
+}
